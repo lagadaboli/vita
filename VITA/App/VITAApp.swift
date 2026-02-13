@@ -1,12 +1,14 @@
 import SwiftUI
+import VITACore
+import CausalityEngine
 
-/// VITA — Personal Health Causality Engine
-/// Main app entry point. Initializes the HealthKit bridge and displays the dashboard.
 @main
 struct VITAApp: App {
+    @State private var appState = AppState()
+
     var body: some Scene {
         WindowGroup {
-            DashboardView()
+            ContentView(appState: appState)
         }
     }
 }
