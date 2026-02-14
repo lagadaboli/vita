@@ -133,6 +133,27 @@ enum Migrations {
             )
         }
 
+        // MARK: - v2: Environmental Conditions
+
+        migrator.registerMigration("v2_environmental_conditions") { db in
+            try db.create(table: "environmental_conditions") { t in
+                t.autoIncrementedPrimaryKey("id")
+                t.column("timestamp", .datetime).notNull()
+                t.column("temperatureCelsius", .double).notNull()
+                t.column("humidity", .double).notNull()
+                t.column("aqiUS", .integer).notNull()
+                t.column("uvIndex", .double).notNull()
+                t.column("pollenIndex", .integer).notNull()
+                t.column("condition", .text).notNull()
+            }
+
+            try db.create(
+                index: "idx_environmental_conditions_timestamp",
+                on: "environmental_conditions",
+                columns: ["timestamp"]
+            )
+        }
+
         try migrator.migrate(dbWriter)
     }
 }

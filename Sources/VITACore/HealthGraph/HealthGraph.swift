@@ -40,6 +40,13 @@ public final class HealthGraph: Sendable {
         }
     }
 
+    /// Add an environmental condition as a node in the graph.
+    public func ingest(_ condition: inout EnvironmentalCondition) throws {
+        try database.write { db in
+            try condition.save(db)
+        }
+    }
+
     // MARK: - Edge Operations
 
     /// Add a causal edge between two nodes.
@@ -117,6 +124,34 @@ public final class HealthGraph: Sendable {
                 .filter(HealthGraphEdge.Columns.createdAt >= startDate)
                 .filter(HealthGraphEdge.Columns.createdAt <= endDate)
                 .order(HealthGraphEdge.Columns.causalStrength.desc)
+                .fetchAll(db)
+        }
+    }
+
+    /// Query environmental conditions within a time window.
+    public func queryEnvironment(
+        from startDate: Date,
+        to endDate: Date
+    ) throws -> [EnvironmentalCondition] {
+        try database.read { db in
+            try EnvironmentalCondition
+                .filter(EnvironmentalCondition.Columns.timestamp >= startDate)
+                .filter(EnvironmentalCondition.Columns.timestamp <= endDate)
+                .order(EnvironmentalCondition.Columns.timestamp)
+                .fetchAll(db)
+        }
+    }
+
+    /// Query behavioral events within a time window.
+    public func queryBehaviors(
+        from startDate: Date,
+        to endDate: Date
+    ) throws -> [BehavioralEvent] {
+        try database.read { db in
+            try BehavioralEvent
+                .filter(BehavioralEvent.Columns.timestamp >= startDate)
+                .filter(BehavioralEvent.Columns.timestamp <= endDate)
+                .order(BehavioralEvent.Columns.timestamp)
                 .fetchAll(db)
         }
     }

@@ -16,6 +16,9 @@ final class DashboardViewModel {
     var glucoseTrend: TrendDirection = .stable
     var hrvTrend: TrendDirection = .stable
     var insights: [InsightData] = []
+    var currentWeight: Double = 0
+    var weightTrend: TrendDirection = .stable
+    var currentAQI: Int = 0
 
     struct InsightData: Identifiable {
         let id = UUID()
@@ -80,6 +83,26 @@ final class DashboardViewModel {
             dopamineDebt = 35
         }
 
+        // Load weight
+        let weekAgo = calendar.date(byAdding: .day, value: -7, to: now) ?? now
+        if let weightSamples = try? appState.healthGraph.querySamples(type: .bodyWeight, from: weekAgo, to: now) {
+            if let last = weightSamples.last {
+                currentWeight = last.value
+                if weightSamples.count >= 2 {
+                    let prev = weightSamples[weightSamples.count - 2].value
+                    if last.value > prev + 0.2 { weightTrend = .up }
+                    else if last.value < prev - 0.2 { weightTrend = .down }
+                    else { weightTrend = .stable }
+                }
+            }
+        }
+
+        // Load environment (most recent AQI)
+        if let conditions = try? appState.healthGraph.queryEnvironment(from: dayStart, to: now),
+           let latest = conditions.last {
+            currentAQI = latest.aqiUS
+        }
+
         // Calculate health score
         computeHealthScore()
 
@@ -106,6 +129,12 @@ final class DashboardViewModel {
 
         // HR penalty
         if currentHR > 72 { score -= (currentHR - 72) * 0.5 }
+
+        // AQI penalty
+        if currentAQI > 100 { score -= Double(currentAQI - 100) * 0.1 }
+
+        // Weight trend penalty (if trending up)
+        if weightTrend == .up { score -= 3 }
 
         healthScore = max(min(score, 100), 0)
     }
@@ -158,6 +187,26 @@ final class DashboardViewModel {
                 message: "Excessive passive screen time detected. Consider a focus mode block.",
                 severity: .alert,
                 timestamp: Date().addingTimeInterval(-900)
+            ))
+        }
+
+        if currentAQI > 100 {
+            insights.append(InsightData(
+                icon: "aqi.medium",
+                title: "Poor Air Quality",
+                message: "AQI is \(currentAQI). Consider staying indoors and using an air purifier.",
+                severity: currentAQI > 150 ? .alert : .warning,
+                timestamp: Date()
+            ))
+        }
+
+        if weightTrend == .up && currentWeight > 0 {
+            insights.append(InsightData(
+                icon: "scalemass",
+                title: "Weight Trending Up",
+                message: "Your weight is trending up at \(String(format: "%.1f", currentWeight)) kg. High GL meals may be contributing.",
+                severity: .info,
+                timestamp: Date().addingTimeInterval(-7200)
             ))
         }
 

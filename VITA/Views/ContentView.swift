@@ -32,8 +32,8 @@ struct ContentView: View {
                 }
         }
         .tint(VITAColors.teal)
-        .onAppear {
-            appState.loadSampleData()
+        .task {
+            await appState.initialize()
         }
     }
 }

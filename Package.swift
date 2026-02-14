@@ -14,6 +14,7 @@ let package = Package(
         .library(name: "HealthKitBridge", targets: ["HealthKitBridge"]),
         .library(name: "ConsumptionBridge", targets: ["ConsumptionBridge"]),
         .library(name: "IntentionalityTracker", targets: ["IntentionalityTracker"]),
+        .library(name: "EnvironmentBridge", targets: ["EnvironmentBridge"]),
         .library(name: "CausalityEngine", targets: ["CausalityEngine"]),
         .executable(name: "VITAApp", targets: ["VITAApp"]),
     ],
@@ -51,11 +52,19 @@ let package = Package(
             path: "Sources/ConsumptionBridge"
         ),
 
-        // MARK: - Layer 3: Intentionality Tracker (Stub)
+        // MARK: - Layer 3: Intentionality Tracker
         .target(
             name: "IntentionalityTracker",
             dependencies: ["VITACore"],
-            path: "Sources/IntentionalityTracker"
+            path: "Sources/IntentionalityTracker",
+            exclude: ["DeviceActivityReportExtension.swift"]
+        ),
+
+        // MARK: - Layer 4: Environment Bridge
+        .target(
+            name: "EnvironmentBridge",
+            dependencies: ["VITACore"],
+            path: "Sources/EnvironmentBridge"
         ),
 
         // MARK: - Causality Engine (Stub)
@@ -74,6 +83,7 @@ let package = Package(
                 "HealthKitBridge",
                 "ConsumptionBridge",
                 "IntentionalityTracker",
+                "EnvironmentBridge",
                 "CausalityEngine",
             ],
             path: "VITA",
@@ -90,6 +100,11 @@ let package = Package(
             name: "HealthKitBridgeTests",
             dependencies: ["HealthKitBridge"],
             path: "Tests/HealthKitBridgeTests"
+        ),
+        .testTarget(
+            name: "EnvironmentBridgeTests",
+            dependencies: ["EnvironmentBridge", "VITACore"],
+            path: "Tests/EnvironmentBridgeTests"
         ),
     ]
 )

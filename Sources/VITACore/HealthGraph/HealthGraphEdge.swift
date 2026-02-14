@@ -45,6 +45,10 @@ extension HealthGraphEdge {
         case behaviorToHRV = "behavior_to_hrv"
         case mealToSleep = "meal_to_sleep"
         case behaviorToSleep = "behavior_to_sleep"
+        case environmentToHRV = "environment_to_hrv"
+        case environmentToSleep = "environment_to_sleep"
+        case environmentToDigestion = "environment_to_digestion"
+        case behaviorToMeal = "behavior_to_meal"
         case temporal
         case causal
     }

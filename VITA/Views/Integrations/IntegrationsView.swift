@@ -11,8 +11,11 @@ struct IntegrationsView: View {
                 VStack(spacing: VITASpacing.xl) {
                     AppleWatchSection(viewModel: viewModel)
                     DoorDashSection(viewModel: viewModel)
+                    InstacartSection(viewModel: viewModel)
                     RotimaticSection(viewModel: viewModel)
                     InstantPotSection(viewModel: viewModel)
+                    WeighingMachineSection(viewModel: viewModel)
+                    EnvironmentSection(viewModel: viewModel)
                 }
                 .padding(.horizontal, VITASpacing.lg)
                 .padding(.bottom, VITASpacing.xxl)

@@ -65,6 +65,87 @@ public enum SampleDataScenarios {
         }
     }
 
+    public struct InstacartOrderTemplate {
+        let hourOffset: Double
+        let items: [MealEvent.Ingredient]
+        let glycemicLoad: Double
+        let healthScore: Int
+        let label: String
+
+        func toMealEvent(dayStart: Date) -> MealEvent {
+            MealEvent(
+                timestamp: dayStart.addingTimeInterval(hourOffset * 3600),
+                source: .instacart,
+                eventType: .groceryPurchase,
+                ingredients: items,
+                cookingMethod: nil,
+                estimatedGlycemicLoad: glycemicLoad,
+                confidence: 0.8
+            )
+        }
+    }
+
+    public struct WeightTemplate {
+        let hourOffset: Double
+        let weightKg: Double
+
+        func toPhysiologicalSample(dayStart: Date) -> PhysiologicalSample {
+            PhysiologicalSample(
+                metricType: .bodyWeight,
+                value: weightKg,
+                unit: "kg",
+                timestamp: dayStart.addingTimeInterval(hourOffset * 3600),
+                source: .smartScale
+            )
+        }
+    }
+
+    public struct ZombieScrollTemplate {
+        let hourOffset: Double
+        let durationMinutes: Double
+        let itemsViewed: Int
+        let itemsPurchased: Int
+        let impulseRatio: Double
+
+        func toBehavioralEvent(dayStart: Date) -> BehavioralEvent {
+            BehavioralEvent(
+                timestamp: dayStart.addingTimeInterval(hourOffset * 3600),
+                duration: durationMinutes * 60,
+                category: .passiveConsumption,
+                appName: "Instacart",
+                dopamineDebtScore: impulseRatio * 100,
+                metadata: [
+                    "itemsViewed": "\(itemsViewed)",
+                    "itemsPurchased": "\(itemsPurchased)",
+                    "impulseRatio": String(format: "%.2f", impulseRatio),
+                    "zombieScroll": "true"
+                ]
+            )
+        }
+    }
+
+    public struct EnvironmentTemplate {
+        let hourOffset: Double
+        let temperatureCelsius: Double
+        let humidity: Double
+        let aqiUS: Int
+        let uvIndex: Double
+        let pollenIndex: Int
+        let condition: EnvironmentalCondition.WeatherCondition
+
+        func toEnvironmentalCondition(dayStart: Date) -> EnvironmentalCondition {
+            EnvironmentalCondition(
+                timestamp: dayStart.addingTimeInterval(hourOffset * 3600),
+                temperatureCelsius: temperatureCelsius,
+                humidity: humidity,
+                aqiUS: aqiUS,
+                uvIndex: uvIndex,
+                pollenIndex: pollenIndex,
+                condition: condition
+            )
+        }
+    }
+
     public struct DayScenario {
         public let meals: [MealTemplate]
         public let hrvSamples: [MetricTemplate]
@@ -72,6 +153,34 @@ public enum SampleDataScenarios {
         public let sleepSamples: [MetricTemplate]
         public let stepSamples: [MetricTemplate]
         public let behaviors: [BehaviorTemplate]
+        public let instacartOrders: [InstacartOrderTemplate]
+        public let weightReadings: [WeightTemplate]
+        public let zombieScrollSessions: [ZombieScrollTemplate]
+        public let environmentReadings: [EnvironmentTemplate]
+
+        public init(
+            meals: [MealTemplate],
+            hrvSamples: [MetricTemplate],
+            heartRateSamples: [MetricTemplate],
+            sleepSamples: [MetricTemplate],
+            stepSamples: [MetricTemplate],
+            behaviors: [BehaviorTemplate],
+            instacartOrders: [InstacartOrderTemplate] = [],
+            weightReadings: [WeightTemplate] = [],
+            zombieScrollSessions: [ZombieScrollTemplate] = [],
+            environmentReadings: [EnvironmentTemplate] = []
+        ) {
+            self.meals = meals
+            self.hrvSamples = hrvSamples
+            self.heartRateSamples = heartRateSamples
+            self.sleepSamples = sleepSamples
+            self.stepSamples = stepSamples
+            self.behaviors = behaviors
+            self.instacartOrders = instacartOrders
+            self.weightReadings = weightReadings
+            self.zombieScrollSessions = zombieScrollSessions
+            self.environmentReadings = environmentReadings
+        }
     }
 
     // MARK: - Scenario Selection
@@ -91,7 +200,7 @@ public enum SampleDataScenarios {
 
     // MARK: - Day Scenarios
 
-    /// Day -6: Healthy baseline — whole wheat rotis, salad, exercise
+    /// Day -6: Healthy baseline — whole wheat rotis, salad, exercise + healthy Instacart order
     private static func dayMinus6_HealthyDay() -> DayScenario {
         DayScenario(
             meals: [
@@ -136,6 +245,25 @@ public enum SampleDataScenarios {
                 BehaviorTemplate(hourOffset: 9, durationMinutes: 120, category: .activeWork, appName: "Xcode", dopamineDebt: nil),
                 BehaviorTemplate(hourOffset: 17, durationMinutes: 45, category: .exercise, appName: "Peloton", dopamineDebt: nil),
                 BehaviorTemplate(hourOffset: 20, durationMinutes: 20, category: .passiveConsumption, appName: "Instagram", dopamineDebt: 25),
+            ],
+            instacartOrders: [
+                InstacartOrderTemplate(
+                    hourOffset: 10.0,
+                    items: [
+                        .init(name: "Organic Spinach", quantityGrams: 200, glycemicIndex: 15, type: "vegetable"),
+                        .init(name: "Red Lentils", quantityGrams: 500, glycemicIndex: 26, type: "legume"),
+                        .init(name: "Brown Rice", quantityGrams: 1000, glycemicIndex: 50, type: "grain"),
+                        .init(name: "Chicken Breast", quantityGrams: 500, glycemicIndex: 0, type: "protein"),
+                        .init(name: "Olive Oil", quantityGrams: 500, glycemicIndex: 0, type: "fat"),
+                    ],
+                    glycemicLoad: 15, healthScore: 85, label: "Healthy Weekly Groceries"
+                ),
+            ],
+            weightReadings: [
+                WeightTemplate(hourOffset: 7.0, weightKg: 78.5),
+            ],
+            environmentReadings: [
+                EnvironmentTemplate(hourOffset: 12.0, temperatureCelsius: 24, humidity: 50, aqiUS: 42, uvIndex: 5, pollenIndex: 3, condition: .clear),
             ]
         )
     }
@@ -185,6 +313,12 @@ public enum SampleDataScenarios {
                 BehaviorTemplate(hourOffset: 14, durationMinutes: 30, category: .passiveConsumption, appName: "Instagram", dopamineDebt: 35),
                 BehaviorTemplate(hourOffset: 15, durationMinutes: 60, category: .stressSignal, appName: "Slack", dopamineDebt: 40),
                 BehaviorTemplate(hourOffset: 21, durationMinutes: 90, category: .passiveConsumption, appName: "Netflix", dopamineDebt: 45),
+            ],
+            weightReadings: [
+                WeightTemplate(hourOffset: 7.0, weightKg: 78.3),
+            ],
+            environmentReadings: [
+                EnvironmentTemplate(hourOffset: 12.0, temperatureCelsius: 26, humidity: 55, aqiUS: 55, uvIndex: 6, pollenIndex: 4, condition: .clear),
             ]
         )
     }
@@ -233,6 +367,12 @@ public enum SampleDataScenarios {
                 BehaviorTemplate(hourOffset: 11, durationMinutes: 60, category: .stressSignal, appName: "Zoom", dopamineDebt: 30),
                 BehaviorTemplate(hourOffset: 14, durationMinutes: 45, category: .passiveConsumption, appName: "Instagram", dopamineDebt: 55),
                 BehaviorTemplate(hourOffset: 20, durationMinutes: 60, category: .passiveConsumption, appName: "Netflix", dopamineDebt: 40),
+            ],
+            weightReadings: [
+                WeightTemplate(hourOffset: 7.0, weightKg: 78.8),
+            ],
+            environmentReadings: [
+                EnvironmentTemplate(hourOffset: 12.0, temperatureCelsius: 35, humidity: 40, aqiUS: 155, uvIndex: 9, pollenIndex: 5, condition: .hot),
             ]
         )
     }
@@ -282,6 +422,28 @@ public enum SampleDataScenarios {
                 BehaviorTemplate(hourOffset: 9, durationMinutes: 150, category: .activeWork, appName: "Xcode", dopamineDebt: nil),
                 BehaviorTemplate(hourOffset: 15, durationMinutes: 30, category: .stressSignal, appName: "Slack", dopamineDebt: 35),
                 BehaviorTemplate(hourOffset: 20, durationMinutes: 30, category: .passiveConsumption, appName: "Instagram", dopamineDebt: 30),
+            ],
+            instacartOrders: [
+                InstacartOrderTemplate(
+                    hourOffset: 11.0,
+                    items: [
+                        .init(name: "White Bread", quantityGrams: 500, glycemicIndex: 75, type: "grain"),
+                        .init(name: "Potato Chips", quantityGrams: 300, glycemicIndex: 70, type: "snack"),
+                        .init(name: "Cola (2L)", quantityML: 2000, glycemicIndex: 63, type: "beverage"),
+                        .init(name: "Frozen Pizza", quantityGrams: 400, glycemicIndex: 80, type: "processed"),
+                        .init(name: "Ice Cream", quantityGrams: 500, glycemicIndex: 62, type: "dairy"),
+                    ],
+                    glycemicLoad: 55, healthScore: 35, label: "Impulse Grocery Run"
+                ),
+            ],
+            weightReadings: [
+                WeightTemplate(hourOffset: 7.0, weightKg: 78.6),
+            ],
+            zombieScrollSessions: [
+                ZombieScrollTemplate(hourOffset: 10.5, durationMinutes: 25, itemsViewed: 47, itemsPurchased: 12, impulseRatio: 0.74),
+            ],
+            environmentReadings: [
+                EnvironmentTemplate(hourOffset: 12.0, temperatureCelsius: 28, humidity: 60, aqiUS: 72, uvIndex: 5, pollenIndex: 9, condition: .cloudy),
             ]
         )
     }
@@ -332,6 +494,12 @@ public enum SampleDataScenarios {
                 BehaviorTemplate(hourOffset: 9, durationMinutes: 180, category: .activeWork, appName: "Xcode", dopamineDebt: nil),
                 BehaviorTemplate(hourOffset: 14, durationMinutes: 60, category: .stressSignal, appName: "Zoom", dopamineDebt: 25),
                 BehaviorTemplate(hourOffset: 20, durationMinutes: 120, category: .passiveConsumption, appName: "Netflix", dopamineDebt: 50),
+            ],
+            weightReadings: [
+                WeightTemplate(hourOffset: 7.0, weightKg: 79.0),
+            ],
+            environmentReadings: [
+                EnvironmentTemplate(hourOffset: 12.0, temperatureCelsius: 22, humidity: 80, aqiUS: 48, uvIndex: 3, pollenIndex: 4, condition: .humid),
             ]
         )
     }
@@ -382,6 +550,15 @@ public enum SampleDataScenarios {
                 BehaviorTemplate(hourOffset: 14, durationMinutes: 90, category: .stressSignal, appName: "Zoom", dopamineDebt: 50),
                 BehaviorTemplate(hourOffset: 16, durationMinutes: 60, category: .passiveConsumption, appName: "Instagram", dopamineDebt: 82),
                 BehaviorTemplate(hourOffset: 21, durationMinutes: 120, category: .passiveConsumption, appName: "Netflix", dopamineDebt: 55),
+            ],
+            weightReadings: [
+                WeightTemplate(hourOffset: 7.0, weightKg: 78.7),
+            ],
+            zombieScrollSessions: [
+                ZombieScrollTemplate(hourOffset: 15.0, durationMinutes: 35, itemsViewed: 63, itemsPurchased: 8, impulseRatio: 0.87),
+            ],
+            environmentReadings: [
+                EnvironmentTemplate(hourOffset: 12.0, temperatureCelsius: 5, humidity: 45, aqiUS: 38, uvIndex: 2, pollenIndex: 2, condition: .cold),
             ]
         )
     }
@@ -418,6 +595,24 @@ public enum SampleDataScenarios {
             behaviors: [
                 BehaviorTemplate(hourOffset: 9, durationMinutes: 120, category: .activeWork, appName: "Xcode", dopamineDebt: nil),
                 BehaviorTemplate(hourOffset: 12, durationMinutes: 20, category: .passiveConsumption, appName: "Instagram", dopamineDebt: 22),
+            ],
+            instacartOrders: [
+                InstacartOrderTemplate(
+                    hourOffset: 10.0,
+                    items: [
+                        .init(name: "Greek Yogurt", quantityGrams: 500, glycemicIndex: 11, type: "dairy"),
+                        .init(name: "Mixed Nuts", quantityGrams: 300, glycemicIndex: 15, type: "nut"),
+                        .init(name: "Whole Wheat Pasta", quantityGrams: 500, glycemicIndex: 42, type: "grain"),
+                        .init(name: "Frozen Waffles", quantityGrams: 300, glycemicIndex: 76, type: "processed"),
+                    ],
+                    glycemicLoad: 30, healthScore: 60, label: "Mixed Weekly Order"
+                ),
+            ],
+            weightReadings: [
+                WeightTemplate(hourOffset: 7.0, weightKg: 78.4),
+            ],
+            environmentReadings: [
+                EnvironmentTemplate(hourOffset: 12.0, temperatureCelsius: 27, humidity: 55, aqiUS: 150, uvIndex: 6, pollenIndex: 5, condition: .cloudy),
             ]
         )
     }

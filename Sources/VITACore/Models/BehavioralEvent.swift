@@ -38,6 +38,7 @@ extension BehavioralEvent {
         case activeWork = "active_work"
         case passiveConsumption = "passive_consumption"
         case stressSignal = "stress_signal"
+        case zombieScrolling = "zombie_scrolling"
         case exercise
         case rest
     }

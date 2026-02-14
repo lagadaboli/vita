@@ -40,6 +40,14 @@ struct MetricCardRow: View {
                 )
 
                 MetricCard(
+                    title: "Weight",
+                    value: viewModel.currentWeight > 0 ? String(format: "%.1f", viewModel.currentWeight) : "--",
+                    unit: "kg",
+                    trend: viewModel.weightTrend,
+                    color: viewModel.weightTrend == .up ? VITAColors.amber : VITAColors.teal
+                )
+
+                MetricCard(
                     title: "Steps",
                     value: formatSteps(viewModel.steps),
                     unit: "",

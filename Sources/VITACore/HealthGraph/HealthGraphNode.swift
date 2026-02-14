@@ -17,6 +17,7 @@ public enum HealthGraphNodeType: String, Codable, Sendable {
     case behavioral
     case symptom
     case causalPattern
+    case environmental
 }
 
 /// Concrete node wrapper for storing heterogeneous nodes in the graph.
@@ -65,6 +66,15 @@ public struct AnyHealthGraphNode: HealthGraphNode, Sendable {
             nodeID: "behavioral_\(event.id ?? 0)",
             nodeType: .behavioral,
             timestamp: event.timestamp
+        )
+    }
+
+    /// Create a node from an EnvironmentalCondition.
+    public static func from(_ condition: EnvironmentalCondition) -> AnyHealthGraphNode {
+        AnyHealthGraphNode(
+            nodeID: "environment_\(condition.id ?? 0)",
+            nodeType: .environmental,
+            timestamp: condition.timestamp
         )
     }
 }

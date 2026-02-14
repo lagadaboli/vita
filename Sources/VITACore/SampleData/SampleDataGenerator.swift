@@ -78,6 +78,30 @@ public final class SampleDataGenerator: Sendable {
             var event = behavior.toBehavioralEvent(dayStart: dayStart)
             try healthGraph.ingest(&event)
         }
+
+        // Instacart orders (grocery purchases)
+        for order in scenario.instacartOrders {
+            var mealEvent = order.toMealEvent(dayStart: dayStart)
+            try healthGraph.ingest(&mealEvent)
+        }
+
+        // Weight readings
+        for weight in scenario.weightReadings {
+            var sample = weight.toPhysiologicalSample(dayStart: dayStart)
+            try healthGraph.ingest(&sample)
+        }
+
+        // Zombie scroll sessions
+        for zombie in scenario.zombieScrollSessions {
+            var event = zombie.toBehavioralEvent(dayStart: dayStart)
+            try healthGraph.ingest(&event)
+        }
+
+        // Environmental conditions
+        for env in scenario.environmentReadings {
+            var condition = env.toEnvironmentalCondition(dayStart: dayStart)
+            try healthGraph.ingest(&condition)
+        }
     }
 
     private func generateGlucoseCurve(mealTime: Date, glycemicLoad: Double, mealID: Int64?) -> [GlucoseReading] {
@@ -194,6 +218,38 @@ public final class SampleDataGenerator: Sendable {
             temporalOffsetSeconds: 1800, confidence: 0.85
         )
         try healthGraph.addEdge(&edge5)
+
+        // environment→HRV edges (AQI impact)
+        var edge6 = HealthGraphEdge(
+            sourceNodeID: "environment_aqi_high", targetNodeID: "hrv_suppressed_env",
+            edgeType: .environmentToHRV, causalStrength: 0.72,
+            temporalOffsetSeconds: 7200, confidence: 0.68
+        )
+        try healthGraph.addEdge(&edge6)
+
+        // environment→sleep edges (pollen impact)
+        var edge7 = HealthGraphEdge(
+            sourceNodeID: "environment_pollen_high", targetNodeID: "sleep_disrupted_1",
+            edgeType: .environmentToSleep, causalStrength: 0.65,
+            temporalOffsetSeconds: 14400, confidence: 0.60
+        )
+        try healthGraph.addEdge(&edge7)
+
+        // zombie scroll→impulse purchase edges
+        var edge8 = HealthGraphEdge(
+            sourceNodeID: "zombie_scroll_1", targetNodeID: "impulse_purchase_1",
+            edgeType: .behaviorToMeal, causalStrength: 0.80,
+            temporalOffsetSeconds: 900, confidence: 0.75
+        )
+        try healthGraph.addEdge(&edge8)
+
+        // environment→digestion edges (heat + spicy)
+        var edge9 = HealthGraphEdge(
+            sourceNodeID: "environment_heat_1", targetNodeID: "digestion_discomfort_1",
+            edgeType: .environmentToDigestion, causalStrength: 0.58,
+            temporalOffsetSeconds: 3600, confidence: 0.55
+        )
+        try healthGraph.addEdge(&edge9)
     }
 
     private func generateCausalPatterns() throws {
@@ -203,6 +259,11 @@ public final class SampleDataGenerator: Sendable {
             ("slow_cook_legumes → lectin_retention → gi_distress", 0.71, 6),
             ("late_meal_>21h → reduced_deep_sleep > 25min", 0.75, 9),
             ("passive_screen > 40min → dopamine_debt > 70 → focus_deficit", 0.68, 7),
+            ("high_aqi > 100 → oxidative_stress → hrv_suppression > 15%", 0.72, 5),
+            ("high_pollen > 8 → histamine_response → sleep_disruption", 0.65, 4),
+            ("zombie_scroll > 20min → impulse_purchase → high_gl_items", 0.80, 6),
+            ("high_3day_avg_gl → elevated_insulin → weight_gain", 0.70, 5),
+            ("extreme_heat > 33C + spicy_meal → digestive_discomfort", 0.58, 3),
         ]
 
         for (pattern, strength, count) in patterns {

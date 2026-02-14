@@ -23,6 +23,10 @@ public final class MockCausalityEngine: CausalityEngineProtocol, Sendable {
             return sleepExplanations()
         } else if lowered.contains("focus") || lowered.contains("brain fog") || lowered.contains("concentrate") {
             return focusExplanations()
+        } else if lowered.contains("weight") || lowered.contains("gain") || lowered.contains("heavy") {
+            return weightExplanations()
+        } else if lowered.contains("air") || lowered.contains("pollution") || lowered.contains("weather") || lowered.contains("pollen") {
+            return environmentExplanations()
         } else {
             return generalExplanations(symptom: symptom)
         }
@@ -34,6 +38,10 @@ public final class MockCausalityEngine: CausalityEngineProtocol, Sendable {
             return mealCounterfactuals()
         } else if eventNodeID.contains("behavior") || eventNodeID.contains("screen") {
             return behaviorCounterfactuals()
+        } else if eventNodeID.contains("weight") || eventNodeID.contains("scale") {
+            return counterfactualsForWeight()
+        } else if eventNodeID.contains("environment") || eventNodeID.contains("aqi") {
+            return counterfactualsForEnvironment()
         } else {
             return generalCounterfactuals()
         }
@@ -75,6 +83,18 @@ public final class MockCausalityEngine: CausalityEngineProtocol, Sendable {
                 strength: 0.68,
                 confidence: 0.72,
                 narrative: "Last night's sleep was shorter than your baseline (6.5h vs 7.5h average) with significantly reduced deep sleep (12% vs your 20% average). This incomplete recovery is compounding the glucose-driven fatigue."
+            ),
+            CausalExplanation(
+                symptom: "Fatigue",
+                causalChain: [
+                    "AQI 150 (Unhealthy)",
+                    "Oxidative stress",
+                    "15% HRV suppression",
+                    "Reduced recovery"
+                ],
+                strength: 0.55,
+                confidence: 0.58,
+                narrative: "Today's poor air quality (AQI 150) is contributing to your fatigue through oxidative stress, which suppresses HRV by approximately 15% and reduces your body's recovery capacity."
             )
         ]
     }
@@ -150,6 +170,88 @@ public final class MockCausalityEngine: CausalityEngineProtocol, Sendable {
                 strength: 0.65,
                 confidence: 0.70,
                 narrative: "Your post-meal glucose crash to 68 mg/dL means your brain is operating with reduced glucose availability. Combined with the high dopamine debt, this creates a compounding focus deficit."
+            ),
+            CausalExplanation(
+                symptom: "Focus Deficit",
+                causalChain: [
+                    "Zombie scrolling on Instacart (35 min)",
+                    "63 items browsed, 8 purchased",
+                    "Impulse ratio: 0.87",
+                    "Dopamine depletion from rapid-reward browsing"
+                ],
+                strength: 0.58,
+                confidence: 0.55,
+                narrative: "Your 35-minute zombie scrolling session on Instacart (viewing 63 items) created a rapid-reward dopamine pattern similar to social media scrolling. This depletes prefrontal dopamine reserves and impairs sustained attention."
+            )
+        ]
+    }
+
+    private func weightExplanations() -> [CausalExplanation] {
+        [
+            CausalExplanation(
+                symptom: "Weight Gain",
+                causalChain: [
+                    "High 3-day average GL (~40)",
+                    "Elevated insulin response",
+                    "Increased water retention",
+                    "+0.5 kg over baseline"
+                ],
+                strength: 0.70,
+                confidence: 0.65,
+                narrative: "Your 3-day average glycemic load has been ~40 (above the recommended 25). Consistently high GL drives elevated insulin, which promotes water retention and fat storage. Your weight increased by 0.5 kg over the past 3 days, correlating with the high-GL DoorDash orders and Instacart impulse purchases."
+            ),
+            CausalExplanation(
+                symptom: "Weight Gain",
+                causalChain: [
+                    "Zombie scrolling on Instacart (25-35 min)",
+                    "Impulse purchases (high impulse ratio 0.74-0.87)",
+                    "High-GL groceries (white bread, chips, soda)",
+                    "Elevated dietary GL"
+                ],
+                strength: 0.62,
+                confidence: 0.58,
+                narrative: "Mindless browsing on Instacart led to impulse purchases of high-GL items (white bread, chips, cola). The zombie scrolling sessions averaged 30 minutes with an impulse ratio of 0.80, meaning most purchased items were unplanned and skewed toward processed, high-glycemic foods."
+            )
+        ]
+    }
+
+    private func environmentExplanations() -> [CausalExplanation] {
+        [
+            CausalExplanation(
+                symptom: "Environmental Health Impact",
+                causalChain: [
+                    "AQI 150 (Unhealthy)",
+                    "Oxidative stress increase",
+                    "HRV suppression ~15%",
+                    "Fatigue and reduced recovery"
+                ],
+                strength: 0.72,
+                confidence: 0.68,
+                narrative: "Today's AQI of 150 is in the 'Unhealthy' range. Exposure to fine particulate matter (PM2.5) triggers oxidative stress, suppressing your HRV by approximately 15%. This reduces your recovery capacity and contributes to fatigue, especially when combined with high-GL meals."
+            ),
+            CausalExplanation(
+                symptom: "Environmental Health Impact",
+                causalChain: [
+                    "High pollen index (9/12)",
+                    "Histamine response",
+                    "Sleep disruption",
+                    "Reduced deep sleep"
+                ],
+                strength: 0.65,
+                confidence: 0.60,
+                narrative: "Pollen levels were high (9/12) recently, triggering a histamine response that can disrupt sleep architecture. Combined with late meals, this further reduced your deep sleep percentage."
+            ),
+            CausalExplanation(
+                symptom: "Environmental Health Impact",
+                causalChain: [
+                    "Extreme heat (35\u{00B0}C)",
+                    "Increased metabolic demand",
+                    "Spicy meal + heat",
+                    "Digestive discomfort"
+                ],
+                strength: 0.58,
+                confidence: 0.55,
+                narrative: "Hot weather (35\u{00B0}C) combined with spicy food increases digestive stress. Heat raises your baseline heart rate and metabolic demand, making glucose regulation less efficient."
             )
         ]
     }
@@ -254,6 +356,52 @@ public final class MockCausalityEngine: CausalityEngineProtocol, Sendable {
                 impact: 0.35,
                 effort: .moderate,
                 confidence: 0.72
+            ),
+        ]
+    }
+
+    public func counterfactualsForWeight() -> [Counterfactual] {
+        [
+            Counterfactual(
+                description: "Keep daily average GL below 25 (-0.3 kg/week)",
+                impact: 0.35,
+                effort: .moderate,
+                confidence: 0.70
+            ),
+            Counterfactual(
+                description: "Avoid Instacart zombie scrolling — use a pre-made list",
+                impact: 0.30,
+                effort: .moderate,
+                confidence: 0.65
+            ),
+            Counterfactual(
+                description: "Replace processed snacks with nuts and yogurt",
+                impact: 0.25,
+                effort: .trivial,
+                confidence: 0.72
+            ),
+        ]
+    }
+
+    public func counterfactualsForEnvironment() -> [Counterfactual] {
+        [
+            Counterfactual(
+                description: "Exercise indoors when AQI > 100 (preserve HRV)",
+                impact: 0.30,
+                effort: .trivial,
+                confidence: 0.75
+            ),
+            Counterfactual(
+                description: "Use air purifier on high-AQI days (-40% PM2.5 exposure)",
+                impact: 0.25,
+                effort: .moderate,
+                confidence: 0.68
+            ),
+            Counterfactual(
+                description: "Take antihistamine on high-pollen days (improve sleep)",
+                impact: 0.20,
+                effort: .trivial,
+                confidence: 0.62
             ),
         ]
     }

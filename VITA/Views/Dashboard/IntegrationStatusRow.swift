@@ -15,6 +15,12 @@ struct IntegrationStatusRow: View {
                 ConnectionStatusBadge(name: "Rotimatic", icon: "circle.grid.3x3", status: .connected)
                 Divider().padding(.leading, 44)
                 ConnectionStatusBadge(name: "Instant Pot", icon: "flame", status: .connected)
+                Divider().padding(.leading, 44)
+                ConnectionStatusBadge(name: "Instacart", icon: "cart", status: .connected)
+                Divider().padding(.leading, 44)
+                ConnectionStatusBadge(name: "Body Scale", icon: "scalemass", status: .connected)
+                Divider().padding(.leading, 44)
+                ConnectionStatusBadge(name: "Environment", icon: "cloud.sun", status: .connected)
             }
             .padding(VITASpacing.cardPadding)
             .background(VITAColors.cardBackground)

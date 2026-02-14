@@ -43,12 +43,14 @@ extension PhysiologicalSample {
         case respiratoryRate = "respiratory_rate"
         case activeEnergy = "active_energy"
         case stepCount = "step_count"
+        case bodyWeight = "body_weight"
     }
 
     public enum DataSource: String, Codable, Sendable, DatabaseValueConvertible {
         case appleWatch
         case cgmDexcom
         case cgmLibre
+        case smartScale
         case manual
     }
 }

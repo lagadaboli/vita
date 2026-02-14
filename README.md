@@ -14,35 +14,42 @@ VITA is a local-first health tracking and causality engine that helps you unders
 
 ## Key Features
 
-### 🔬 **Causality Discovery**
+### Causality Discovery
 - Uses Causal Graph Neural Networks (CGNN) to identify true cause-effect relationships
 - Generates counterfactual scenarios ("What if I had...") with confidence intervals
 - Goes beyond correlation to answer *why* patterns emerge
 
-### 📊 **Multi-Layer Health Tracking**
+### Multi-Layer Health Tracking
 
 **Layer 1: Consumption Bridge**
 - Smart device integration (Rotimatic NEXT, Instant Pot Pro Plus)
 - Virtual receipt parsing (Instacart, DoorDash)
 - Automatic nutrient and glycemic load calculations
 
-**Layer 2: Physiological Pulse**
-- Real-time HealthKit integration (HRV, heart rate, sleep stages, blood oxygen)
-- Continuous Glucose Monitor (CGM) support (Dexcom G7, Libre 3)
+**Layer 2: Physiological Pulse (HealthKit)**
+- Real-time Apple Watch integration (HRV, heart rate, sleep stages, blood oxygen)
+- Continuous Glucose Monitor (CGM) support (Dexcom G7, Libre 3) with spike/crash feature extraction
 - Metabolic state classification based on glucose curves
 
-**Layer 3: Intentionality Tracker**
-- Screen time and app usage behavioral analysis
-- Focus mode and deep work detection
+**Layer 3: Intentionality Tracker (Screen Time)**
+- Screen time monitoring via DeviceActivity framework
+- Zombie scrolling detection for Shopping & Food apps (10/20/30 min thresholds)
 - Dopamine debt scoring to measure passive consumption impact
 
-### 🔐 **Privacy-First Architecture**
+**Layer 4: Environment Bridge (Open-Meteo)**
+- Weather conditions: temperature, humidity, UV index (WMO code mapping)
+- Air quality: US EPA AQI
+- Pollen indices: grass, birch, ragweed (normalized to 0-12 scale)
+- 30-minute polling via CoreLocation (iOS) or static coordinates (macOS)
+- No API key required
+
+### Privacy-First Architecture
 - **Local-first**: All raw health data stays on your device
 - On-device SQLite database with GRDB
 - Optional cloud sync with anonymized causality patterns only
 - No PII, timestamps, or raw health values ever leave your device
 
-### 🧮 **Advanced Analytics**
+### Advanced Analytics
 - Temporal Graph Attention Networks for time-series pattern learning
 - Structural Causal Model (SCM) layer with do-calculus interventions
 - Digestive debt detection (delayed physiological costs)
@@ -60,6 +67,12 @@ VITA is a local-first health tracking and causality engine that helps you unders
 │  │  Consumption   │  │  Physiological │  │  Intentionality       │    │
 │  │  Bridge        │  │  Pulse         │  │  Tracker              │    │
 │  └───────┬───────┘  └───────┬───────┘  └──────────┬───────────┘    │
+│          │                  │                      │                │
+│  ┌───────────────┐         │                      │                │
+│  │  Layer 4       │         │                      │                │
+│  │  Environment   │         │                      │                │
+│  │  Bridge        │         │                      │                │
+│  └───────┬───────┘         │                      │                │
 │          │                  │                      │                │
 │          ▼                  ▼                      ▼                │
 │  ┌─────────────────────────────────────────────────────────────┐   │
@@ -90,6 +103,8 @@ See [ARCHITECTURE.md](docs/ARCHITECTURE.md) for detailed system design.
 | **GNN Framework** | PyTorch Geometric → CoreML | Causal graph neural networks |
 | **Security** | iOS Keychain | Encrypted credential storage |
 | **Cloud Sync** | CloudKit (optional) | E2E encrypted pattern sharing |
+| **Weather API** | Open-Meteo | Free weather/AQI/pollen data |
+| **Testing** | Swift Testing | Modern test framework |
 | **Platforms** | iOS 17+, macOS 14+ | Modern Apple platforms |
 
 ## Project Structure
@@ -105,12 +120,20 @@ VITA/
 │   │
 │   ├── HealthKitBridge/       # HealthKit integration layer
 │   │   ├── HealthKitManager   # Central HK coordinator
-│   │   ├── GlucoseCollector   # CGM data collection
-│   │   ├── HRVCollector       # Heart rate variability
+│   │   ├── HRVCollector       # Heart rate variability (observer query)
+│   │   ├── HeartRateCollector  # Resting heart rate
+│   │   ├── GlucoseCollector   # CGM data with trend classification
 │   │   └── SleepCollector     # Sleep stage tracking
+│   │
+│   ├── EnvironmentBridge/     # Open-Meteo weather/AQI/pollen
+│   │   ├── OpenMeteoClient    # REST API client
+│   │   ├── LocationProvider   # CoreLocation / static fallback
+│   │   └── EnvironmentBridge  # 30-min polling coordinator
 │   │
 │   ├── ConsumptionBridge/     # Meal and consumption tracking
 │   ├── IntentionalityTracker/ # Screen time and behavior analysis
+│   │   ├── IntentionalityTracker  # Behavior classification + dopamine debt
+│   │   └── ScreenTimeTracker      # DeviceActivity monitoring (iOS)
 │   ├── CausalityEngine/       # CGNN and counterfactual generation
 │   └── VITADesignSystem/      # Reusable UI components
 │
@@ -165,10 +188,22 @@ VITA/
 ### First Launch
 
 1. **Grant HealthKit permissions** when prompted
-2. **Wait 1-2 weeks** for passive data collection to build your health graph
-3. **Week 3+**: VITA begins showing correlations and patterns
-4. **Week 5+**: Causal structure learning begins with tentative counterfactuals
-5. **Week 9+**: Active learning mode — VITA suggests experiments to test hypotheses
+2. **Grant Location permissions** for environment data (weather, AQI, pollen)
+3. **Grant Screen Time permissions** for zombie scrolling detection (iOS only)
+4. **Wait 1-2 weeks** for passive data collection to build your health graph
+5. **Week 3+**: VITA begins showing correlations and patterns
+6. **Week 5+**: Causal structure learning begins with tentative counterfactuals
+7. **Week 9+**: Active learning mode — VITA suggests experiments to test hypotheses
+
+### Platform Behavior
+
+- **iOS**: Full integration — HealthKit live data, CoreLocation, Screen Time monitoring
+- **macOS**: Graceful degradation — sample data for HealthKit/ScreenTime, static location for environment
+
+All platform-specific APIs are guarded:
+- HealthKit: `#if canImport(HealthKit)`
+- DeviceActivity/FamilyControls: `#if os(iOS)`
+- CoreLocation: `#if canImport(CoreLocation)`
 
 ### Integrating Smart Devices
 
@@ -198,12 +233,13 @@ VITA/
 ### Running Tests
 
 ```bash
-# Run all tests
+# Run all tests (42 tests)
 swift test
 
 # Run specific test target
 swift test --filter VITACoreTests
 swift test --filter HealthKitBridgeTests
+swift test --filter EnvironmentBridgeTests
 ```
 
 ### Building for Release
@@ -220,20 +256,22 @@ swift build -c release
 
 ## Modules
 
-### Core Modules
-
-- **VITACore**: Foundation models and health graph
-- **HealthKitBridge**: Apple HealthKit integration
-- **ConsumptionBridge**: Meal and nutrition tracking
-- **IntentionalityTracker**: Behavioral pattern analysis
-- **CausalityEngine**: ML-based causality discovery
-- **VITADesignSystem**: Reusable UI components
+| Module | Description |
+|--------|-------------|
+| **VITACore** | Data models, Health Graph, GRDB storage, migrations, sample data |
+| **HealthKitBridge** | Apple Watch collectors (HRV, Heart Rate, Glucose, Sleep) using `HKAnchoredObjectQuery` |
+| **ConsumptionBridge** | Meal event ingestion and Instacart receipt parsing |
+| **EnvironmentBridge** | Open-Meteo client for weather, AQI, and pollen; CoreLocation provider |
+| **IntentionalityTracker** | Screen Time monitoring via DeviceActivity, dopamine debt scoring |
+| **CausalityEngine** | Causal pattern detection and counterfactual generation |
+| **VITADesignSystem** | Shared UI components, colors, and typography |
 
 Each module can be imported independently:
 
 ```swift
 import VITACore
 import HealthKitBridge
+import EnvironmentBridge
 import CausalityEngine
 ```
 
@@ -260,6 +298,9 @@ import CausalityEngine
 - [x] HealthKit integration (HRV, sleep, heart rate)
 - [x] SQLite health graph with GRDB
 - [x] Mock causality engine
+- [x] Environment bridge (Open-Meteo weather, AQI, pollen)
+- [x] Screen Time zombie scrolling detection
+- [x] Live HealthKit collector wiring in AppState
 - [ ] CGM integration (Dexcom G7, Libre 3)
 - [ ] Rotimatic NEXT device discovery
 - [ ] Instant Pot BLE integration
@@ -288,7 +329,3 @@ This project is currently unlicensed. Please contact the repository owner for li
 
 For questions, feedback, or collaboration:
 - GitHub Issues: [lagadaboli/vita/issues](https://github.com/lagadaboli/vita/issues)
-
----
-
-**Built with ❤️ for understanding health causality, one data point at a time.**
