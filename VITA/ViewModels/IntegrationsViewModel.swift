@@ -202,7 +202,7 @@ final class IntegrationsViewModel {
 
         // Environment readings
         if let conditions = try? appState.healthGraph.queryEnvironment(from: weekAgo, to: now) {
-            environmentReadings = conditions.prefix(7).map { condition in
+            environmentReadings = conditions.suffix(7).map { condition in
                 let risks = condition.healthRisks
                 let impact: String
                 if risks.isEmpty {

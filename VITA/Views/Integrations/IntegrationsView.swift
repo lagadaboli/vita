@@ -4,6 +4,7 @@ import VITADesignSystem
 struct IntegrationsView: View {
     var appState: AppState
     @State private var viewModel = IntegrationsViewModel()
+    private let refreshTimer = Timer.publish(every: 60, on: .main, in: .common).autoconnect()
 
     var body: some View {
         NavigationStack {
@@ -23,6 +24,9 @@ struct IntegrationsView: View {
             .background(VITAColors.background)
             .navigationTitle("Integrations")
             .onAppear {
+                viewModel.load(from: appState)
+            }
+            .onReceive(refreshTimer) { _ in
                 viewModel.load(from: appState)
             }
         }

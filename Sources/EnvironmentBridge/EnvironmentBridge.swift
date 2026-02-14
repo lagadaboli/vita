@@ -24,9 +24,20 @@ public final class EnvironmentBridge: @unchecked Sendable {
         self.client = client
 
         #if canImport(CoreLocation)
-        self.locationProvider = locationProvider ?? CoreLocationProvider()
+        self.locationProvider = locationProvider ?? FallbackLocationProvider(
+            providers: [
+                TimeoutLocationProvider(base: CoreLocationProvider(), timeoutSeconds: 8),
+                IPGeolocationProvider(),
+                StaticLocationProvider()
+            ]
+        )
         #else
-        self.locationProvider = locationProvider ?? StaticLocationProvider()
+        self.locationProvider = locationProvider ?? FallbackLocationProvider(
+            providers: [
+                IPGeolocationProvider(),
+                StaticLocationProvider()
+            ]
+        )
         #endif
     }
 
