@@ -1,6 +1,22 @@
+# Swift
 .build/
 .swiftpm/
 *.xcodeproj/
 xcuserdata/
 DerivedData/
 .DS_Store
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+*.egg-info/
+dist/
+
+# Docker / env
+.env
+
+# IDE
+.idea/
+.vscode/
