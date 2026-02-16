@@ -1,0 +1,37 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "appliance-event",
+  "title": "ApplianceEvent",
+  "description": "Cross-platform contract for raw appliance telemetry events.",
+  "type": "object",
+  "required": ["device_type", "device_id", "timestamp_ms", "raw_payload"],
+  "properties": {
+    "id": {
+      "type": "integer"
+    },
+    "device_type": {
+      "type": "string",
+      "enum": ["rotimatic_next", "instant_pot"]
+    },
+    "device_id": {
+      "type": "string",
+      "description": "MAC address or serial number"
+    },
+    "timestamp_ms": {
+      "type": "integer",
+      "description": "Unix epoch milliseconds"
+    },
+    "raw_payload": {
+      "type": "string",
+      "description": "JSON-encoded device telemetry blob"
+    },
+    "session_id": {
+      "type": ["string", "null"],
+      "description": "Groups events within a single cooking session"
+    },
+    "created_at": {
+      "type": ["string", "null"],
+      "format": "date-time"
+    }
+  }
+}

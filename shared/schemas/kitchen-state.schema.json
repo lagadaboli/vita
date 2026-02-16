@@ -1,0 +1,36 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "kitchen-state",
+  "title": "KitchenState",
+  "description": "Cross-platform contract for kitchen FSM state.",
+  "type": "object",
+  "required": ["state", "entered_at_ms"],
+  "properties": {
+    "id": {
+      "type": "integer"
+    },
+    "state": {
+      "type": "string",
+      "enum": ["idle", "cooking", "meal_ready", "meal_consumed"]
+    },
+    "entered_at_ms": {
+      "type": "integer",
+      "description": "Unix epoch milliseconds when this state was entered"
+    },
+    "exited_at_ms": {
+      "type": ["integer", "null"],
+      "description": "Unix epoch milliseconds when this state was exited"
+    },
+    "trigger_event_id": {
+      "type": ["integer", "null"],
+      "description": "ID of the appliance event that triggered this transition"
+    },
+    "device_type": {
+      "type": ["string", "null"]
+    },
+    "metadata": {
+      "type": ["object", "null"],
+      "additionalProperties": true
+    }
+  }
+}
