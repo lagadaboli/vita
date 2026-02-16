@@ -59,9 +59,9 @@ public final class HealthKitManager: @unchecked Sendable {
     public func enableBackgroundDelivery() async throws {
         let criticalTypes: [(HKObjectType, HKUpdateFrequency)] = [
             (HKQuantityType.quantityType(forIdentifier: .heartRateVariabilitySDNN)!, .immediate),
-            (HKQuantityType.quantityType(forIdentifier: .restingHeartRate)!, .hourly),
+            (HKQuantityType.quantityType(forIdentifier: .restingHeartRate)!, .immediate),
             (HKQuantityType.quantityType(forIdentifier: .bloodGlucose)!, .immediate),
-            (HKCategoryType.categoryType(forIdentifier: .sleepAnalysis)!, .daily),
+            (HKCategoryType.categoryType(forIdentifier: .sleepAnalysis)!, .hourly),
         ]
 
         for (type, frequency) in criticalTypes {

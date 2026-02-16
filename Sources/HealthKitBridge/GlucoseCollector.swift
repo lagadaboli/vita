@@ -16,6 +16,7 @@ public final class GlucoseCollector: @unchecked Sendable {
 
     #if canImport(HealthKit)
     private let healthStore: HKHealthStore
+    private var observerQuery: HKObserverQuery?
     #endif
 
     #if canImport(HealthKit)
@@ -35,6 +36,33 @@ public final class GlucoseCollector: @unchecked Sendable {
     }
 
     #if canImport(HealthKit)
+    /// Start observing blood glucose samples with background delivery.
+    public func startObserving() throws {
+        let glucoseType = HKQuantityType.quantityType(forIdentifier: .bloodGlucose)!
+
+        let observer = HKObserverQuery(sampleType: glucoseType, predicate: nil) { [weak self] _, completionHandler, error in
+            guard error == nil else {
+                completionHandler()
+                return
+            }
+            Task {
+                try? await self?.performIncrementalSync()
+                completionHandler()
+            }
+        }
+
+        healthStore.execute(observer)
+        self.observerQuery = observer
+    }
+
+    /// Stop observing blood glucose samples.
+    public func stopObserving() {
+        if let query = observerQuery {
+            healthStore.stop(query)
+            observerQuery = nil
+        }
+    }
+
     /// Fetch and process glucose data since last sync.
     public func performIncrementalSync() async throws {
         let glucoseType = HKQuantityType.quantityType(forIdentifier: .bloodGlucose)!

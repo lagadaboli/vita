@@ -4,12 +4,12 @@ import HealthKit
 import Foundation
 import VITACore
 
-/// Collects sleep stage data from HealthKit.
-/// Sleep quality is a CRITICAL signal — correlates with meal timing, HRV, and cognitive performance.
-public final class SleepCollector: @unchecked Sendable {
+/// Collects step count samples from HealthKit.
+/// This enables real daily activity totals and integration health status based on live data.
+public final class StepCountCollector: @unchecked Sendable {
     private let database: VITADatabase
     private let healthGraph: HealthGraph
-    private let metricKey = "sleep_analysis"
+    private let metricKey = "step_count"
 
     #if canImport(HealthKit)
     private let healthStore: HKHealthStore
@@ -33,11 +33,11 @@ public final class SleepCollector: @unchecked Sendable {
     }
 
     #if canImport(HealthKit)
-    /// Start observing sleep analysis samples with background delivery.
+    /// Start observing step count samples with background delivery.
     public func startObserving() throws {
-        let sleepType = HKCategoryType.categoryType(forIdentifier: .sleepAnalysis)!
+        let stepType = HKQuantityType.quantityType(forIdentifier: .stepCount)!
 
-        let observer = HKObserverQuery(sampleType: sleepType, predicate: nil) { [weak self] _, completionHandler, error in
+        let observer = HKObserverQuery(sampleType: stepType, predicate: nil) { [weak self] _, completionHandler, error in
             guard error == nil else {
                 completionHandler()
                 return
@@ -52,7 +52,7 @@ public final class SleepCollector: @unchecked Sendable {
         self.observerQuery = observer
     }
 
-    /// Stop observing sleep analysis samples.
+    /// Stop observing step count samples.
     public func stopObserving() {
         if let query = observerQuery {
             healthStore.stop(query)
@@ -60,16 +60,16 @@ public final class SleepCollector: @unchecked Sendable {
         }
     }
 
-    /// Fetch and process sleep data since last sync.
+    /// Fetch and process step count data since last sync.
     public func performIncrementalSync() async throws {
-        let sleepType = HKCategoryType.categoryType(forIdentifier: .sleepAnalysis)!
+        let stepType = HKQuantityType.quantityType(forIdentifier: .stepCount)!
 
         let syncState = try HealthKitSyncState.load(for: metricKey, from: database)
         let anchor = syncState?.anchorData.flatMap { try? NSKeyedUnarchiver.unarchivedObject(ofClass: HKQueryAnchor.self, from: $0) }
 
         try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
             let query = HKAnchoredObjectQuery(
-                type: sleepType,
+                type: stepType,
                 predicate: nil,
                 anchor: anchor,
                 limit: HKObjectQueryNoLimit
@@ -85,7 +85,7 @@ public final class SleepCollector: @unchecked Sendable {
                 }
 
                 do {
-                    try self.processSleepSamples(samples ?? [], newAnchor: newAnchor)
+                    try self.processStepSamples(samples ?? [], newAnchor: newAnchor)
                     continuation.resume()
                 } catch {
                     continuation.resume(throwing: error)
@@ -96,20 +96,17 @@ public final class SleepCollector: @unchecked Sendable {
         }
     }
 
-    private func processSleepSamples(_ samples: [HKSample], newAnchor: HKQueryAnchor?) throws {
+    private func processStepSamples(_ samples: [HKSample], newAnchor: HKQueryAnchor?) throws {
         for sample in samples {
-            guard let categorySample = sample as? HKCategorySample else { continue }
-
-            let stageLabel = sleepStageLabel(for: categorySample.value)
-            let duration = categorySample.endDate.timeIntervalSince(categorySample.startDate)
+            guard let quantitySample = sample as? HKQuantitySample else { continue }
+            let steps = quantitySample.quantity.doubleValue(for: HKUnit.count())
 
             var physiologicalSample = PhysiologicalSample(
-                metricType: .sleepAnalysis,
-                value: duration / 60.0, // Store as minutes
-                unit: "min",
-                timestamp: categorySample.startDate,
-                source: .appleWatch,
-                metadata: ["stage": stageLabel]
+                metricType: .stepCount,
+                value: steps,
+                unit: "count",
+                timestamp: quantitySample.startDate,
+                source: .appleWatch
             )
             try healthGraph.ingest(&physiologicalSample)
         }
@@ -122,26 +119,6 @@ public final class SleepCollector: @unchecked Sendable {
                 lastSyncDate: Date()
             )
             try state.save(to: database)
-        }
-    }
-
-    private func sleepStageLabel(for value: Int) -> String {
-        if #available(iOS 16.0, *) {
-            switch HKCategoryValueSleepAnalysis(rawValue: value) {
-            case .asleepCore: return "core"
-            case .asleepDeep: return "deep"
-            case .asleepREM: return "rem"
-            case .awake: return "awake"
-            case .inBed: return "in_bed"
-            default: return "unknown"
-            }
-        } else {
-            switch HKCategoryValueSleepAnalysis(rawValue: value) {
-            case .inBed: return "in_bed"
-            case .asleep: return "asleep"
-            case .awake: return "awake"
-            default: return "unknown"
-            }
         }
     }
     #endif

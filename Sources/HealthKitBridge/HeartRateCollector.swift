@@ -13,6 +13,7 @@ public final class HeartRateCollector: @unchecked Sendable {
 
     #if canImport(HealthKit)
     private let healthStore: HKHealthStore
+    private var observerQuery: HKObserverQuery?
     #endif
 
     #if canImport(HealthKit)
@@ -32,6 +33,33 @@ public final class HeartRateCollector: @unchecked Sendable {
     }
 
     #if canImport(HealthKit)
+    /// Start observing resting heart rate samples with background delivery.
+    public func startObserving() throws {
+        let hrType = HKQuantityType.quantityType(forIdentifier: .restingHeartRate)!
+
+        let observer = HKObserverQuery(sampleType: hrType, predicate: nil) { [weak self] _, completionHandler, error in
+            guard error == nil else {
+                completionHandler()
+                return
+            }
+            Task {
+                try? await self?.performIncrementalSync()
+                completionHandler()
+            }
+        }
+
+        healthStore.execute(observer)
+        self.observerQuery = observer
+    }
+
+    /// Stop observing resting heart rate samples.
+    public func stopObserving() {
+        if let query = observerQuery {
+            healthStore.stop(query)
+            observerQuery = nil
+        }
+    }
+
     /// Fetch and process resting heart rate data since last sync.
     public func performIncrementalSync() async throws {
         let hrType = HKQuantityType.quantityType(forIdentifier: .restingHeartRate)!
