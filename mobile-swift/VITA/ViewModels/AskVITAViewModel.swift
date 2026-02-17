@@ -30,20 +30,11 @@ final class AskVITAViewModel {
             explanations = try await appState.causalityEngine.querySymptom(text)
             hasQueried = true
 
-            // Load relevant counterfactuals
-            let lowered = text.lowercased()
-            let mock = appState.causalityEngine
-            if lowered.contains("tired") || lowered.contains("fatigue") || lowered.contains("energy") {
-                counterfactuals = mock.counterfactualsForTired()
-            } else if lowered.contains("stomach") || lowered.contains("bloat") || lowered.contains("digest") {
-                counterfactuals = mock.counterfactualsForStomach()
-            } else if lowered.contains("sleep") || lowered.contains("insomnia") {
-                counterfactuals = mock.counterfactualsForSleep()
-            } else if lowered.contains("focus") || lowered.contains("brain fog") || lowered.contains("concentrate") {
-                counterfactuals = mock.counterfactualsForFocus()
-            } else {
-                counterfactuals = try await mock.generateCounterfactual(for: "general")
-            }
+            // Generate context-aware counterfactuals from the explanations
+            counterfactuals = try await appState.causalityEngine.generateCounterfactual(
+                forSymptom: text,
+                explanations: explanations
+            )
         } catch {
             explanations = []
             counterfactuals = []

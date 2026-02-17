@@ -20,7 +20,7 @@ final class AppState {
 
     let database: VITADatabase
     let healthGraph: HealthGraph
-    let causalityEngine: MockCausalityEngine
+    let causalityEngine: CausalityEngine
     var isLoaded = false
     var loadError: String?
     var dataMode: DataMode = .live
@@ -42,7 +42,7 @@ final class AppState {
             let db = try VITADatabase.inMemory()
             self.database = db
             self.healthGraph = HealthGraph(database: db)
-            self.causalityEngine = MockCausalityEngine(database: db, healthGraph: healthGraph)
+            self.causalityEngine = CausalityEngine(database: db, healthGraph: healthGraph)
         } catch {
             fatalError("Failed to initialize database: \(error)")
         }

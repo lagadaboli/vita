@@ -154,6 +154,39 @@ enum Migrations {
             )
         }
 
+        // MARK: - v3: Causality Engine
+
+        migrator.registerMigration("v3_causality_engine") { db in
+            // Reasoning traces for transparency and debugging
+            try db.create(table: "reasoning_traces") { t in
+                t.autoIncrementedPrimaryKey("id")
+                t.column("symptom", .text).notNull()
+                t.column("phase", .text).notNull()
+                t.column("hypotheses", .text).notNull()       // JSON
+                t.column("observations", .text).notNull()      // JSON
+                t.column("conclusion", .text).notNull()        // DebtType
+                t.column("confidence", .double).notNull()
+                t.column("durationMs", .integer).notNull()
+                t.column("timestamp", .datetime).notNull()
+            }
+
+            // Edge weight learning history
+            try db.create(table: "edge_weight_history") { t in
+                t.autoIncrementedPrimaryKey("id")
+                t.column("edgeID", .integer).notNull()
+                t.column("previousStrength", .double).notNull()
+                t.column("newStrength", .double).notNull()
+                t.column("confirmed", .boolean).notNull()
+                t.column("timestamp", .datetime).notNull()
+            }
+
+            try db.create(
+                index: "idx_reasoning_traces_timestamp",
+                on: "reasoning_traces",
+                columns: ["timestamp"]
+            )
+        }
+
         try migrator.migrate(dbWriter)
     }
 }

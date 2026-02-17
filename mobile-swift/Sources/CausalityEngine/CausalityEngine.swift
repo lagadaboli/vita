@@ -2,15 +2,13 @@ import Foundation
 import VITACore
 
 /// The Brain: Causality Engine.
-/// Implements a Causal Graph Neural Network (CGNN) that identifies hidden correlations
-/// between consumption, physiological signals, and digital behavior.
+/// A neuro-symbolic agent using the ReAct framework to identify root causes
+/// of symptoms by distinguishing Metabolic Debt, Digital Debt, and Somatic Stress.
 ///
-/// Future implementation will include:
-/// - Temporal Graph Attention Network (TGAT) for causal strength learning
-/// - Structural Causal Model (SCM) layer for do-calculus interventions
-/// - Counterfactual generation with confidence intervals
-/// - Digestive Debt and Dopamine Debt detection algorithms
-/// - Cold start strategy (passive → correlation → causal → active learning)
+/// Three-tier graceful degradation:
+/// - Tier A: Deterministic Bio-Rule Engine (always available)
+/// - Tier B: ReAct Agent with analysis tools (Week 5+)
+/// - Tier C: Local LLM narrative generation (Week 9+)
 public protocol CausalityEngineProtocol: Sendable {
     /// Query the causal graph to explain a symptom.
     /// e.g., "Why am I tired?" → returns causal chain with confidence.
@@ -71,32 +69,63 @@ public struct Counterfactual: Sendable {
     }
 }
 
-/// Stub implementation — returns placeholder responses.
+/// The real Causality Engine implementation.
+/// Orchestrates the ReAct agent, bio-rule engine, maturity tracker,
+/// edge weight learner, and intervention calculator.
 public final class CausalityEngine: CausalityEngineProtocol, Sendable {
     private let database: VITADatabase
     private let healthGraph: HealthGraph
+    private let agent: ReActAgent
+    private let interventionCalculator: InterventionCalculator
+    private let metabolicDebtScorer: MetabolicDebtScorer
+    private let edgeWeightLearner: EdgeWeightLearner
 
-    public init(database: VITADatabase, healthGraph: HealthGraph) {
+    public init(database: VITADatabase, healthGraph: HealthGraph, llm: (any LocalLLMService)? = nil) {
         self.database = database
         self.healthGraph = healthGraph
+        self.interventionCalculator = InterventionCalculator(healthGraph: healthGraph)
+        self.metabolicDebtScorer = MetabolicDebtScorer()
+        self.edgeWeightLearner = EdgeWeightLearner()
+
+        let maturityTracker = EngineMaturityTracker(healthGraph: healthGraph)
+        let ruleEngine = BioRuleEngine()
+        let narrativeGen = NarrativeGenerator(llm: llm)
+        let toolRegistry = ToolRegistry()
+        let debtClassifier = DebtClassifier()
+
+        self.agent = ReActAgent(
+            healthGraph: healthGraph,
+            toolRegistry: toolRegistry,
+            debtClassifier: debtClassifier,
+            ruleEngine: ruleEngine,
+            narrativeGenerator: narrativeGen,
+            maturityTracker: maturityTracker
+        )
     }
 
     public func querySymptom(_ symptom: String) async throws -> [CausalExplanation] {
-        // Stub: will implement TGAT + SCM reasoning
-        []
+        try agent.reason(about: symptom)
     }
 
     public func generateCounterfactual(for eventNodeID: String) async throws -> [Counterfactual] {
-        // Stub: will implement SCM do-calculus interventions
-        []
+        try interventionCalculator.generateCounterfactuals(for: eventNodeID)
+    }
+
+    /// Generate counterfactuals informed by symptom explanations.
+    public func generateCounterfactual(
+        forSymptom symptom: String,
+        explanations: [CausalExplanation]
+    ) async throws -> [Counterfactual] {
+        try interventionCalculator.generateCounterfactualsForSymptom(symptom, explanations: explanations)
     }
 
     public func digestiveDebtScore(windowHours: Int = 6) async throws -> Double {
-        // Stub: will compute from meal-glucose-HRV chain
-        0.0
+        try metabolicDebtScorer.score(healthGraph: healthGraph, windowHours: windowHours)
     }
 
     public func updateGraph() async throws {
-        // Stub: will retrain edge weights from new data
+        let now = Date()
+        let window = now.addingTimeInterval(-24 * 3600)...now
+        try edgeWeightLearner.batchUpdate(healthGraph: healthGraph, window: window)
     }
 }
