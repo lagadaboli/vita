@@ -104,7 +104,7 @@ public final class CausalityEngine: CausalityEngineProtocol, Sendable {
     }
 
     public func querySymptom(_ symptom: String) async throws -> [CausalExplanation] {
-        try agent.reason(about: symptom)
+        try await agent.reason(about: symptom)
     }
 
     public func generateCounterfactual(for eventNodeID: String) async throws -> [Counterfactual] {

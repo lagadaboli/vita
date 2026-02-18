@@ -37,7 +37,7 @@ public struct ReActAgent: Sendable {
     }
 
     /// Main entry point: reason about a symptom and return causal explanations.
-    public func reason(about symptom: String) throws -> [CausalExplanation] {
+    public func reason(about symptom: String) async throws -> [CausalExplanation] {
         let config = try maturityTracker.phaseConfig()
 
         // During passive/correlation phase, use rules only
@@ -85,8 +85,8 @@ public struct ReActAgent: Sendable {
             }
         }
 
-        // Build explanations from ranked hypotheses
-        return buildExplanations(from: state)
+        // Build explanations from ranked hypotheses (async for LLM narrative)
+        return await buildExplanations(from: state)
     }
 
     // MARK: - Thought Stage: Hypothesis Generation
@@ -214,30 +214,34 @@ public struct ReActAgent: Sendable {
 
     // MARK: - Build Final Explanations
 
-    private func buildExplanations(from state: AgentState) -> [CausalExplanation] {
+    private func buildExplanations(from state: AgentState) async -> [CausalExplanation] {
         let rankedDebts = debtClassifier.classify(
             hypotheses: state.hypotheses,
             observations: state.observations
         )
 
-        return state.hypotheses
+        let topHypotheses = state.hypotheses
             .filter { $0.confidence > 0.15 }
             .prefix(3)
-            .map { hypothesis in
-                let score = rankedDebts.first(where: { $0.type == hypothesis.debtType })?.score ?? hypothesis.confidence
-                let narrative = narrativeGenerator.generate(
-                    symptom: state.symptom,
-                    hypothesis: hypothesis,
-                    observations: state.observations
-                )
 
-                return CausalExplanation(
-                    symptom: state.symptom,
-                    causalChain: hypothesis.causalChain,
-                    strength: score,
-                    confidence: hypothesis.confidence,
-                    narrative: narrative
-                )
-            }
+        var explanations: [CausalExplanation] = []
+        for hypothesis in topHypotheses {
+            let score = rankedDebts.first(where: { $0.type == hypothesis.debtType })?.score ?? hypothesis.confidence
+            let narrative = await narrativeGenerator.generate(
+                symptom: state.symptom,
+                hypothesis: hypothesis,
+                observations: state.observations
+            )
+
+            explanations.append(CausalExplanation(
+                symptom: state.symptom,
+                causalChain: hypothesis.causalChain,
+                strength: score,
+                confidence: hypothesis.confidence,
+                narrative: narrative
+            ))
+        }
+
+        return explanations
     }
 }

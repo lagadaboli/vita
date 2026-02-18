@@ -32,6 +32,7 @@ from app.api.appliances import router as appliances_router
 from app.api.grocery import router as grocery_router
 from app.api.kitchen import router as kitchen_router
 from app.api.meals import router as meals_router
+from app.api.notifications import router as notifications_router
 from app.api.sync import router as sync_router
 
 app.include_router(appliances_router)
@@ -39,6 +40,7 @@ app.include_router(meals_router)
 app.include_router(kitchen_router)
 app.include_router(grocery_router)
 app.include_router(sync_router)
+app.include_router(notifications_router)
 
 
 @app.get("/health")

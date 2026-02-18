@@ -37,12 +37,24 @@ final class AppState {
     private var environmentBridge: EnvironmentBridge?
     private var screenTimeTracker: ScreenTimeTracker?
 
+    /// On-device LLM service for narrative generation (Metal-accelerated).
+    #if canImport(MLXLLM) && canImport(Metal)
+    let llmService: MLXLLMService
+    #endif
+
     init() {
         do {
             let db = try VITADatabase.inMemory()
             self.database = db
             self.healthGraph = HealthGraph(database: db)
+
+            #if canImport(MLXLLM) && canImport(Metal)
+            let llm = MLXLLMService()
+            self.llmService = llm
+            self.causalityEngine = CausalityEngine(database: db, healthGraph: healthGraph, llm: llm)
+            #else
             self.causalityEngine = CausalityEngine(database: db, healthGraph: healthGraph)
+            #endif
         } catch {
             fatalError("Failed to initialize database: \(error)")
         }
@@ -122,6 +134,19 @@ final class AppState {
             dataMode = .sampleData
             loadSampleData()
         }
+
+        // Background-load the on-device LLM (non-blocking)
+        #if canImport(MLXLLM) && canImport(Metal)
+        Task.detached(priority: .background) { [llmService] in
+            do {
+                try await llmService.loadModel()
+            } catch {
+                #if DEBUG
+                print("[AppState] LLM model load failed: \(error.localizedDescription)")
+                #endif
+            }
+        }
+        #endif
 
         isLoaded = true
     }

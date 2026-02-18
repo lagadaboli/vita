@@ -20,6 +20,7 @@ let package = Package(
     ],
     dependencies: [
         .package(url: "https://github.com/groue/GRDB.swift.git", from: "6.24.0"),
+        .package(url: "https://github.com/ml-explore/mlx-swift-lm/", from: "2.30.3"),
     ],
     targets: [
         // MARK: - Core
@@ -67,10 +68,14 @@ let package = Package(
             path: "Sources/EnvironmentBridge"
         ),
 
-        // MARK: - Causality Engine (Stub)
+        // MARK: - Causality Engine
         .target(
             name: "CausalityEngine",
-            dependencies: ["VITACore"],
+            dependencies: [
+                "VITACore",
+                .product(name: "MLXLLM", package: "mlx-swift-lm", condition: .when(platforms: [.iOS, .macOS])),
+                .product(name: "MLXLMCommon", package: "mlx-swift-lm", condition: .when(platforms: [.iOS, .macOS])),
+            ],
             path: "Sources/CausalityEngine"
         ),
 

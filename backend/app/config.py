@@ -40,6 +40,12 @@ class Settings(BaseSettings):
     instacart_session_cookie: str = ""
     doordash_session_cookie: str = ""
 
+    # Twilio SMS escalation (credentials stay server-side only)
+    twilio_account_sid: str = ""
+    twilio_auth_token: str = ""
+    twilio_from_number: str = ""
+    twilio_escalation_to_number: str = ""
+
     model_config = {"env_prefix": "VITA_"}
 
 

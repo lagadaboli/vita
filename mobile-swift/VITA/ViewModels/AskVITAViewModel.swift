@@ -11,6 +11,8 @@ final class AskVITAViewModel {
     var explanations: [CausalExplanation] = []
     var counterfactuals: [Counterfactual] = []
     var hasQueried = false
+    var glucoseDataPoints: [GlucoseDataPoint] = []
+    var mealAnnotations: [MealAnnotationPoint] = []
 
     let suggestions = [
         "Why am I tired?",
@@ -35,6 +37,17 @@ final class AskVITAViewModel {
                 forSymptom: text,
                 explanations: explanations
             )
+
+            // Fetch glucose + meal data for annotated chart
+            loadChartData(appState: appState)
+
+            // Tier 1: Watch nudge for high-confidence results
+            if let top = explanations.first, top.confidence >= 0.65 {
+                await sendWatchNudge(explanation: top, appState: appState)
+            }
+
+            // Tier 4: SMS escalation check
+            await checkEscalation(appState: appState)
         } catch {
             explanations = []
             counterfactuals = []
@@ -53,6 +66,76 @@ final class AskVITAViewModel {
                 detail: "",
                 timeOffset: index > 0 ? timeOffsets[min(index, timeOffsets.count - 1)] : nil,
                 color: colors[index % colors.count]
+            )
+        }
+    }
+
+    // MARK: - Chart Data
+
+    private func loadChartData(appState: AppState) {
+        let now = Date()
+        let sixHoursAgo = now.addingTimeInterval(-6 * 3600)
+
+        do {
+            let readings = try appState.healthGraph.queryGlucose(from: sixHoursAgo, to: now)
+            glucoseDataPoints = readings.map {
+                GlucoseDataPoint(timestamp: $0.timestamp, value: $0.glucoseMgDL)
+            }
+
+            let meals = try appState.healthGraph.queryMeals(from: sixHoursAgo, to: now)
+            mealAnnotations = meals.map { meal in
+                let label = meal.ingredients.first?.name ?? meal.source.rawValue
+                let gl = meal.estimatedGlycemicLoad ?? meal.computedGlycemicLoad
+                return MealAnnotationPoint(timestamp: meal.timestamp, label: label, glycemicLoad: gl)
+            }
+        } catch {
+            #if DEBUG
+            print("[AskVITAViewModel] Chart data load failed: \(error)")
+            #endif
+        }
+    }
+
+    // MARK: - Watch Nudge (Tier 1)
+
+    private func sendWatchNudge(explanation: CausalExplanation, appState: AppState) async {
+        let nudgeGenerator = NudgeGenerator()
+        let nudgeText = await nudgeGenerator.generate(
+            symptom: explanation.symptom,
+            explanation: explanation,
+            llm: nil // Watch nudge uses template — LLM on phone only for full narrative
+        )
+
+        let payload = WatchNudgePayload(
+            symptom: explanation.symptom,
+            nudgeText: nudgeText,
+            actionText: counterfactuals.first?.description ?? "Take a short break",
+            confidence: explanation.confidence,
+            timestamp: Date(),
+            causeType: explanation.causalChain.first ?? "unknown"
+        )
+
+        #if canImport(WatchConnectivity)
+        WatchConnectivityBridge.shared.sendNudge(payload)
+        #endif
+    }
+
+    // MARK: - SMS Escalation (Tier 4)
+
+    private func checkEscalation(appState: AppState) async {
+        guard let top = explanations.first else { return }
+
+        let classifier = HighPainClassifier()
+        let score = classifier.score(
+            explanation: top,
+            healthGraph: appState.healthGraph
+        )
+
+        if score >= 0.75 {
+            let client = EscalationClient()
+            await client.escalate(
+                symptom: top.symptom,
+                reason: top.narrative,
+                confidence: score
             )
         }
     }

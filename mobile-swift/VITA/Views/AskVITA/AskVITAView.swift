@@ -69,7 +69,10 @@ struct AskVITAView: View {
             ForEach(Array(viewModel.explanations.enumerated()), id: \.offset) { index, explanation in
                 CausalExplanationCard(
                     explanation: explanation,
-                    nodes: viewModel.causalNodes(for: explanation)
+                    nodes: viewModel.causalNodes(for: explanation),
+                    glucoseDataPoints: viewModel.glucoseDataPoints,
+                    mealAnnotations: viewModel.mealAnnotations,
+                    counterfactuals: viewModel.counterfactuals
                 )
                 .padding(.horizontal, VITASpacing.lg)
             }
