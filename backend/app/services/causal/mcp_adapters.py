@@ -300,10 +300,25 @@ class InstacartServerAdapter:
             raw_receipts = [r for r in payload["orders"] if isinstance(r, dict)]
         elif isinstance(payload.get("items"), list):
             raw_receipts = [r for r in payload["items"] if isinstance(r, dict)]
+        elif isinstance(payload.get("data"), dict):
+            data_block = payload["data"]
+            if isinstance(data_block.get("receipts"), list):
+                raw_receipts = [
+                    r for r in data_block["receipts"] if isinstance(r, dict)
+                ]
+            elif isinstance(data_block.get("orders"), list):
+                raw_receipts = [
+                    r for r in data_block["orders"] if isinstance(r, dict)
+                ]
 
         normalized: list[dict[str, Any]] = []
         for receipt in raw_receipts:
-            raw_items = receipt.get("items") or receipt.get("line_items") or []
+            raw_items = (
+                receipt.get("items")
+                or receipt.get("line_items")
+                or receipt.get("lineItems")
+                or []
+            )
             items: list[dict[str, Any]] = []
             if isinstance(raw_items, list):
                 for item in raw_items:
@@ -313,10 +328,12 @@ class InstacartServerAdapter:
                         {
                             "name": item.get("name")
                             or item.get("item_name")
+                            or item.get("itemName")
                             or item.get("title")
                             or "unknown",
                             "category": item.get("category"),
-                            "glycemic_index": item.get("glycemic_index"),
+                            "glycemic_index": item.get("glycemic_index")
+                            or item.get("glycemicIndex"),
                         }
                     )
 
@@ -324,10 +341,15 @@ class InstacartServerAdapter:
                 {
                     "order_id": receipt.get("order_id")
                     or receipt.get("id")
-                    or receipt.get("receipt_id"),
+                    or receipt.get("orderId")
+                    or receipt.get("receipt_id")
+                    or receipt.get("receiptId"),
                     "timestamp_ms": receipt.get("timestamp_ms")
+                    or receipt.get("timestampMs")
                     or receipt.get("created_at_ms")
-                    or receipt.get("order_timestamp_ms"),
+                    or receipt.get("createdAtMs")
+                    or receipt.get("order_timestamp_ms")
+                    or receipt.get("orderTimestampMs"),
                     "source": receipt.get("source") or "instacart",
                     "items": items,
                 }

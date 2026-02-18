@@ -1,12 +1,15 @@
 import Foundation
 import CryptoKit
+#if canImport(UIKit)
+import UIKit
+#endif
 
 /// Client for posting SMS escalation requests to the backend.
 /// Twilio credentials stay server-side only — this client only sends hashed identifiers.
 struct EscalationClient: Sendable {
     private let baseURL: URL
 
-    init(baseURL: URL = URL(string: "http://localhost:8000")!) {
+    init(baseURL: URL = EscalationClient.defaultBaseURL) {
         self.baseURL = baseURL
     }
 
@@ -56,5 +59,17 @@ struct EscalationClient: Sendable {
 
         let hash = SHA256.hash(data: Data(identifier.utf8))
         return hash.compactMap { String(format: "%02x", $0) }.joined()
+    }
+
+    private static var defaultBaseURL: URL {
+        if let configured = Bundle.main.object(
+            forInfoDictionaryKey: "VITABackendURL"
+        ) as? String,
+            !configured.isEmpty,
+            let url = URL(string: configured)
+        {
+            return url
+        }
+        return URL(string: "http://127.0.0.1:8000")!
     }
 }

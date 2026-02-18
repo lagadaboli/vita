@@ -25,9 +25,16 @@ struct IntegrationsView: View {
             .navigationTitle("Integrations")
             .onAppear {
                 viewModel.load(from: appState)
+                Task {
+                    await appState.refreshDeliveryOrders()
+                    viewModel.load(from: appState)
+                }
             }
             .onReceive(refreshTimer) { _ in
-                viewModel.load(from: appState)
+                Task {
+                    await appState.refreshDeliveryOrders()
+                    viewModel.load(from: appState)
+                }
             }
         }
     }

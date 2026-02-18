@@ -38,7 +38,10 @@ public final class ConsumptionBridge: ConsumptionBridgeProtocol, Sendable {
     }
 
     public func fetchRecentOrders(from source: MealEvent.MealSource) async throws -> [MealEvent] {
-        let watermark = UserDefaults.standard.integer(forKey: Self.watermarkKey)
+        // Best-effort refresh of MCP-backed grocery sources before pulling sync events.
+        await triggerGroceryFetch()
+
+        let watermark = loadSyncWatermark()
 
         var components = URLComponents(
             url: backendURL.appendingPathComponent("api/v1/sync/pull"),
@@ -69,6 +72,30 @@ public final class ConsumptionBridge: ConsumptionBridgeProtocol, Sendable {
         }
 
         return matching
+    }
+
+    private func loadSyncWatermark() -> Int {
+        let stored = UserDefaults.standard.integer(forKey: Self.watermarkKey)
+        guard stored > 0 else { return 0 }
+
+        // Database is currently in-memory; after relaunch the local timeline is empty
+        // but UserDefaults persists. In that case, pull from 0 so mock/live events repopulate.
+        let hasLocalMeals = (try? database.read { db in
+            try MealEvent.fetchCount(db) > 0
+        }) ?? false
+
+        return hasLocalMeals ? stored : 0
+    }
+
+    private func triggerGroceryFetch() async {
+        let url = backendURL.appendingPathComponent("api/v1/grocery/fetch")
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        do {
+            _ = try await URLSession.shared.data(for: request)
+        } catch {
+            // Non-fatal; sync/pull still returns whatever data already exists server-side.
+        }
     }
 }
 

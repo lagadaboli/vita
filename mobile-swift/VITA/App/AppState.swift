@@ -39,8 +39,18 @@ final class AppState {
     private var screenTimeTracker: ScreenTimeTracker?
     private var consumptionBridge: ConsumptionBridge?
 
-    /// Backend URL — update this to match your Mac's local IP when testing on device.
-    private static let backendURL = URL(string: "http://10.0.0.233:8000")!
+    /// Backend URL for mobile-to-Mac testing. Override via Info.plist `VITABackendURL`.
+    private static let backendURL: URL = {
+        if let configured = Bundle.main.object(
+            forInfoDictionaryKey: "VITABackendURL"
+        ) as? String,
+            !configured.isEmpty,
+            let url = URL(string: configured)
+        {
+            return url
+        }
+        return URL(string: "http://127.0.0.1:8000")!
+    }()
 
     /// On-device LLM service for narrative generation (Metal-accelerated).
     #if canImport(MLXLLM) && canImport(Metal)
@@ -147,7 +157,7 @@ final class AppState {
             backendURL: Self.backendURL
         )
         self.consumptionBridge = bridge
-        try? await bridge.fetchRecentOrders(from: .doordash)
+        await refreshDeliveryOrders()
 
         // Background-load the on-device LLM (non-blocking)
         #if canImport(MLXLLM) && canImport(Metal)
@@ -171,6 +181,26 @@ final class AppState {
             try generator.generateAll()
         } catch {
             loadError = error.localizedDescription
+        }
+    }
+
+    func refreshDeliveryOrders() async {
+        guard let bridge = consumptionBridge else { return }
+
+        do {
+            _ = try await bridge.fetchRecentOrders(from: .doordash)
+        } catch {
+            #if DEBUG
+            print("[AppState] DoorDash sync failed: \(error.localizedDescription)")
+            #endif
+        }
+
+        do {
+            _ = try await bridge.fetchRecentOrders(from: .instacart)
+        } catch {
+            #if DEBUG
+            print("[AppState] Instacart sync failed: \(error.localizedDescription)")
+            #endif
         }
     }
 }

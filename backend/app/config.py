@@ -4,6 +4,10 @@ from pathlib import Path
 
 from pydantic_settings import BaseSettings
 
+_BACKEND_ROOT = Path(__file__).resolve().parents[1]
+_DEFAULT_INSTACART_MCP_COMMAND = f"python3 {_BACKEND_ROOT / 'instacart_mcp_server.py'}"
+_DEFAULT_DOORDASH_MCP_COMMAND = f"python3 {_BACKEND_ROOT / 'doordash_mcp_server.py'}"
+
 
 class Settings(BaseSettings):
     """VITA backend configuration. Values can be overridden via environment variables."""
@@ -40,11 +44,11 @@ class Settings(BaseSettings):
     instacart_session_cookie: str = ""
     doordash_session_cookie: str = ""
 
-    # MCP stdio integrations (optional, preferred when configured)
+    # MCP stdio integrations (default: local mocks; fallback when session-cookie fetch is not set)
     mcp_stdio_timeout_seconds: float = 20.0
-    instacart_mcp_stdio_command: str = ""
+    instacart_mcp_stdio_command: str = _DEFAULT_INSTACART_MCP_COMMAND
     instacart_mcp_tool_name: str = "get_recent_orders"
-    doordash_mcp_stdio_command: str = ""
+    doordash_mcp_stdio_command: str = _DEFAULT_DOORDASH_MCP_COMMAND
     doordash_mcp_tool_name: str = "get_recent_orders"
 
     # Twilio SMS escalation (credentials stay server-side only)

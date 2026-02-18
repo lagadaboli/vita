@@ -24,6 +24,116 @@ class GroceryService:
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
 
+    @staticmethod
+    def _cookie_header(raw_cookie: str, default_cookie_name: str) -> str:
+        raw = raw_cookie.strip()
+        if not raw:
+            return ""
+
+        # Supports both full Cookie header values and bare token values.
+        if ";" in raw or "=" in raw:
+            return raw
+
+        return f"{default_cookie_name}={raw}"
+
+    @staticmethod
+    def _extract_raw_orders(payload: Any) -> list[dict[str, Any]]:
+        if payload is None:
+            return []
+
+        if isinstance(payload, list):
+            return [o for o in payload if isinstance(o, dict)]
+
+        if not isinstance(payload, dict):
+            return []
+
+        candidate_lists = [
+            payload.get("orders"),
+            payload.get("receipts"),
+            payload.get("items"),
+            payload.get("results"),
+            payload.get("data", {}).get("orders")
+            if isinstance(payload.get("data"), dict)
+            else None,
+            payload.get("data", {}).get("receipts")
+            if isinstance(payload.get("data"), dict)
+            else None,
+            payload.get("order_history", {}).get("orders")
+            if isinstance(payload.get("order_history"), dict)
+            else None,
+            payload.get("orderHistory", {}).get("orders")
+            if isinstance(payload.get("orderHistory"), dict)
+            else None,
+        ]
+        for candidate in candidate_lists:
+            if isinstance(candidate, list):
+                return [o for o in candidate if isinstance(o, dict)]
+
+        return []
+
+    @staticmethod
+    def _normalize_orders(raw_orders: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        normalized: list[dict[str, Any]] = []
+        for order in raw_orders:
+            raw_items = (
+                order.get("items")
+                or order.get("line_items")
+                or order.get("lineItems")
+                or order.get("order_items")
+                or order.get("orderItems")
+                or []
+            )
+            items: list[dict[str, Any]] = []
+            if isinstance(raw_items, list):
+                for item in raw_items:
+                    if not isinstance(item, dict):
+                        continue
+                    items.append(
+                        {
+                            "name": item.get("name")
+                            or item.get("item_name")
+                            or item.get("itemName")
+                            or item.get("title")
+                            or "unknown",
+                            "quantity": item.get("quantity") or item.get("qty"),
+                            "unit": item.get("unit"),
+                            "price_cents": item.get("price_cents")
+                            or item.get("priceCents")
+                            or item.get("price")
+                            or item.get("total_price_cents")
+                            or item.get("totalPriceCents"),
+                            "glycemic_index": item.get("glycemic_index")
+                            or item.get("glycemicIndex"),
+                            "category": item.get("category"),
+                        }
+                    )
+
+            normalized.append(
+                {
+                    "id": order.get("id")
+                    or order.get("order_id")
+                    or order.get("orderId")
+                    or order.get("receipt_id")
+                    or order.get("receiptId")
+                    or order.get("uuid"),
+                    "created_at_ms": order.get("created_at_ms")
+                    or order.get("createdAtMs")
+                    or order.get("timestamp_ms")
+                    or order.get("timestampMs")
+                    or order.get("order_timestamp_ms")
+                    or order.get("orderTimestampMs"),
+                    "total_cents": order.get("total_cents")
+                    or order.get("totalCents")
+                    or order.get("total_price_cents")
+                    or order.get("totalPriceCents")
+                    or order.get("subtotal_cents")
+                    or order.get("subtotalCents"),
+                    "items": items,
+                }
+            )
+
+        return [o for o in normalized if o.get("id")]
+
     async def fetch_receipts_via_mcp(
         self,
         command: str,
@@ -49,56 +159,8 @@ class GroceryService:
         if not payload:
             return []
 
-        raw_orders: list[dict[str, Any]] = []
-        if isinstance(payload, dict):
-            if isinstance(payload.get("orders"), list):
-                raw_orders = [o for o in payload["orders"] if isinstance(o, dict)]
-            elif isinstance(payload.get("receipts"), list):
-                raw_orders = [o for o in payload["receipts"] if isinstance(o, dict)]
-            elif isinstance(payload.get("items"), list):
-                raw_orders = [o for o in payload["items"] if isinstance(o, dict)]
-        elif isinstance(payload, list):
-            raw_orders = [o for o in payload if isinstance(o, dict)]
-
-        normalized: list[dict[str, Any]] = []
-        for order in raw_orders:
-            raw_items = order.get("items") or order.get("line_items") or []
-            items: list[dict[str, Any]] = []
-            if isinstance(raw_items, list):
-                for item in raw_items:
-                    if not isinstance(item, dict):
-                        continue
-                    items.append(
-                        {
-                            "name": item.get("name")
-                            or item.get("item_name")
-                            or item.get("title")
-                            or "unknown",
-                            "quantity": item.get("quantity"),
-                            "unit": item.get("unit"),
-                            "price_cents": item.get("price_cents")
-                            or item.get("price")
-                            or item.get("total_price_cents"),
-                            "glycemic_index": item.get("glycemic_index"),
-                            "category": item.get("category"),
-                        }
-                    )
-
-            normalized.append(
-                {
-                    "id": order.get("id")
-                    or order.get("order_id")
-                    or order.get("receipt_id"),
-                    "created_at_ms": order.get("created_at_ms")
-                    or order.get("timestamp_ms")
-                    or order.get("order_timestamp_ms"),
-                    "total_cents": order.get("total_cents")
-                    or order.get("total_price_cents"),
-                    "items": items,
-                }
-            )
-
-        return [o for o in normalized if o.get("id")]
+        raw_orders = self._extract_raw_orders(payload)
+        return self._normalize_orders(raw_orders)
 
     async def fetch_instacart_receipts_mcp(self, days: int = 7) -> list[dict[str, Any]]:
         return await self.fetch_receipts_via_mcp(
@@ -119,23 +181,81 @@ class GroceryService:
     async def fetch_instacart_receipts(self, session_cookie: str) -> list[dict[str, Any]]:
         """Fetch recent Instacart orders using stored session cookie.
 
-        Returns raw receipt data. Actual parsing happens in store_receipt().
+        Returns normalized order data.
         """
         if not session_cookie:
             logger.warning("No Instacart session cookie configured")
             return []
 
+        cookie_header = self._cookie_header(session_cookie, default_cookie_name="session")
+
         try:
             async with httpx.AsyncClient(
-                headers={"Cookie": f"session={session_cookie}"},
+                headers={
+                    "Cookie": cookie_header,
+                    "Accept": "application/json,text/plain,*/*",
+                    "User-Agent": "VITA/0.2.0 (+local-dev)",
+                },
+                follow_redirects=True,
                 timeout=30.0,
             ) as client:
-                resp = await client.get("https://www.instacart.com/api/v3/orders")
-                resp.raise_for_status()
-                return resp.json().get("orders", [])
+                for url in (
+                    "https://www.instacart.com/api/v3/orders",
+                    "https://www.instacart.com/api/v3/orders?limit=100",
+                ):
+                    resp = await client.get(url)
+                    if resp.status_code >= 400:
+                        continue
+                    payload = resp.json()
+                    normalized = self._normalize_orders(self._extract_raw_orders(payload))
+                    if normalized:
+                        return normalized
         except Exception:
             logger.exception("Instacart receipt fetch failed")
+        return []
+
+    async def fetch_doordash_receipts(self, session_cookie: str) -> list[dict[str, Any]]:
+        """Fetch recent DoorDash orders using stored session cookie.
+
+        Returns normalized order data.
+        """
+        if not session_cookie:
+            logger.warning("No DoorDash session cookie configured")
             return []
+
+        cookie_header = self._cookie_header(
+            session_cookie, default_cookie_name="dd_session_id"
+        )
+
+        try:
+            async with httpx.AsyncClient(
+                headers={
+                    "Cookie": cookie_header,
+                    "Accept": "application/json,text/plain,*/*",
+                    "User-Agent": "VITA/0.2.0 (+local-dev)",
+                },
+                follow_redirects=True,
+                timeout=30.0,
+            ) as client:
+                for url in (
+                    "https://www.doordash.com/consumer/v1/orders?offset=0&limit=100",
+                    "https://api-consumer-client.doordash.com/consumer/v1/orders?offset=0&limit=100",
+                ):
+                    resp = await client.get(url)
+                    if resp.status_code >= 400:
+                        continue
+
+                    try:
+                        payload = resp.json()
+                    except ValueError:
+                        continue
+
+                    normalized = self._normalize_orders(self._extract_raw_orders(payload))
+                    if normalized:
+                        return normalized
+        except Exception:
+            logger.exception("DoorDash receipt fetch failed")
+        return []
 
     async def store_receipt(
         self,
