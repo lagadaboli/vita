@@ -81,7 +81,10 @@ async def get_receipt_items(
 @router.post("/fetch")
 async def trigger_fetch():
     """Trigger a manual grocery receipt fetch."""
-    return {"message": "Grocery fetch triggered"}
+    from app.workers.grocery_worker import GroceryWorker
+    worker = GroceryWorker()
+    await worker.fetch_now()
+    return {"message": "Grocery fetch complete"}
 
 
 @router.get("/cross-reference", response_model=list[CrossReferenceResult])

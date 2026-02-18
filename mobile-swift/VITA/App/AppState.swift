@@ -2,6 +2,7 @@ import SwiftUI
 import VITACore
 import CausalityEngine
 import HealthKitBridge
+import ConsumptionBridge
 import EnvironmentBridge
 import IntentionalityTracker
 
@@ -36,6 +37,10 @@ final class AppState {
 
     private var environmentBridge: EnvironmentBridge?
     private var screenTimeTracker: ScreenTimeTracker?
+    private var consumptionBridge: ConsumptionBridge?
+
+    /// Backend URL — update this to match your Mac's local IP when testing on device.
+    private static let backendURL = URL(string: "http://10.0.0.233:8000")!
 
     /// On-device LLM service for narrative generation (Metal-accelerated).
     #if canImport(MLXLLM) && canImport(Metal)
@@ -134,6 +139,15 @@ final class AppState {
             dataMode = .sampleData
             loadSampleData()
         }
+
+        // 4. Consumption Bridge — pull DoorDash (and other delivery) orders from backend.
+        let bridge = ConsumptionBridge(
+            database: database,
+            healthGraph: healthGraph,
+            backendURL: Self.backendURL
+        )
+        self.consumptionBridge = bridge
+        try? await bridge.fetchRecentOrders(from: .doordash)
 
         // Background-load the on-device LLM (non-blocking)
         #if canImport(MLXLLM) && canImport(Metal)

@@ -1,6 +1,6 @@
 //
 //  ContentView.swift
-//  Vita
+//  VitaIOS
 //
 //  Created by Aboli  Lagad on 2/17/26.
 //
