@@ -40,6 +40,13 @@ class Settings(BaseSettings):
     instacart_session_cookie: str = ""
     doordash_session_cookie: str = ""
 
+    # MCP stdio integrations (optional, preferred when configured)
+    mcp_stdio_timeout_seconds: float = 20.0
+    instacart_mcp_stdio_command: str = ""
+    instacart_mcp_tool_name: str = "get_recent_orders"
+    doordash_mcp_stdio_command: str = ""
+    doordash_mcp_tool_name: str = "get_recent_orders"
+
     # Twilio SMS escalation (credentials stay server-side only)
     twilio_account_sid: str = ""
     twilio_auth_token: str = ""

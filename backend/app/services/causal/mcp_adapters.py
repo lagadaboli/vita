@@ -14,12 +14,14 @@ from typing import Any
 from sqlalchemy import select, desc
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config import settings
 from app.models.appliance_event import ApplianceEvent
 from app.models.causal_edge import CausalEdge
 from app.models.grocery_receipt import GroceryItem, GroceryReceipt
 from app.models.health_event import HealthEvent
 from app.models.meal_event import MealEvent
 from app.models.reasoning_trace import ReasoningTrace
+from app.services.mcp_stdio import call_mcp_tool_stdio
 from app.services.causal.glucose_classifier import (
     EnergyState,
     GlucoseTrend,
@@ -228,6 +230,25 @@ class InstacartServerAdapter:
 
     async def get_recent_receipts(self, days: int = 7) -> MCPToolResult:
         """Get grocery receipts from the last N days."""
+        # Prefer real MCP stdio integration when configured.
+        if settings.instacart_mcp_stdio_command:
+            try:
+                payload = await call_mcp_tool_stdio(
+                    command=settings.instacart_mcp_stdio_command,
+                    tool_name=settings.instacart_mcp_tool_name,
+                    arguments={"days": days},
+                    timeout_seconds=settings.mcp_stdio_timeout_seconds,
+                )
+                normalized = self._normalize_mcp_payload(payload)
+                if normalized:
+                    return MCPToolResult(
+                        data={"receipts": normalized},
+                        source="instacart_server",
+                    )
+            except Exception:
+                # Fall through to DB-backed adapter.
+                pass
+
         cutoff_ms = int((time.time() - days * 86400) * 1000)
 
         q = (
@@ -266,6 +287,126 @@ class InstacartServerAdapter:
             )
 
         return MCPToolResult(data={"receipts": receipt_data}, source="instacart_server")
+
+    @staticmethod
+    def _normalize_mcp_payload(payload: dict[str, Any] | None) -> list[dict[str, Any]]:
+        if not payload:
+            return []
+
+        raw_receipts: list[dict[str, Any]] = []
+        if isinstance(payload.get("receipts"), list):
+            raw_receipts = [r for r in payload["receipts"] if isinstance(r, dict)]
+        elif isinstance(payload.get("orders"), list):
+            raw_receipts = [r for r in payload["orders"] if isinstance(r, dict)]
+        elif isinstance(payload.get("items"), list):
+            raw_receipts = [r for r in payload["items"] if isinstance(r, dict)]
+
+        normalized: list[dict[str, Any]] = []
+        for receipt in raw_receipts:
+            raw_items = receipt.get("items") or receipt.get("line_items") or []
+            items: list[dict[str, Any]] = []
+            if isinstance(raw_items, list):
+                for item in raw_items:
+                    if not isinstance(item, dict):
+                        continue
+                    items.append(
+                        {
+                            "name": item.get("name")
+                            or item.get("item_name")
+                            or item.get("title")
+                            or "unknown",
+                            "category": item.get("category"),
+                            "glycemic_index": item.get("glycemic_index"),
+                        }
+                    )
+
+            normalized.append(
+                {
+                    "order_id": receipt.get("order_id")
+                    or receipt.get("id")
+                    or receipt.get("receipt_id"),
+                    "timestamp_ms": receipt.get("timestamp_ms")
+                    or receipt.get("created_at_ms")
+                    or receipt.get("order_timestamp_ms"),
+                    "source": receipt.get("source") or "instacart",
+                    "items": items,
+                }
+            )
+
+        return [r for r in normalized if r.get("order_id")]
+
+
+class DoordashServerAdapter:
+    """Reads DoorDash order data from MCP stdio or meal_events fallback."""
+
+    def __init__(self, session: AsyncSession) -> None:
+        self.session = session
+
+    async def get_recent_orders(self, days: int = 7) -> MCPToolResult:
+        # Prefer real MCP stdio integration when configured.
+        if settings.doordash_mcp_stdio_command:
+            try:
+                payload = await call_mcp_tool_stdio(
+                    command=settings.doordash_mcp_stdio_command,
+                    tool_name=settings.doordash_mcp_tool_name,
+                    arguments={"days": days},
+                    timeout_seconds=settings.mcp_stdio_timeout_seconds,
+                )
+                normalized = InstacartServerAdapter._normalize_mcp_payload(payload)
+                if normalized:
+                    for order in normalized:
+                        if not order.get("source"):
+                            order["source"] = "doordash"
+                    return MCPToolResult(
+                        data={"orders": normalized},
+                        source="doordash_server",
+                    )
+            except Exception:
+                # Fall through to DB-backed adapter.
+                pass
+
+        # Fallback: derive recent DoorDash data from meal_events table.
+        cutoff_ms = int((time.time() - days * 86400) * 1000)
+        q = (
+            select(MealEvent)
+            .where(MealEvent.source == "doordash")
+            .where(MealEvent.timestamp_ms >= cutoff_ms)
+            .order_by(desc(MealEvent.timestamp_ms))
+            .limit(10)
+        )
+        result = await self.session.execute(q)
+        meals = list(result.scalars().all())
+        if not meals:
+            return MCPToolResult(data=None, source="doordash_server")
+
+        orders: list[dict[str, Any]] = []
+        for meal in meals:
+            item_names: list[dict[str, Any]] = []
+            try:
+                ingredients = json.loads(meal.ingredients) if meal.ingredients else []
+                if isinstance(ingredients, list):
+                    for ingredient in ingredients:
+                        if isinstance(ingredient, dict):
+                            item_names.append(
+                                {
+                                    "name": ingredient.get("name", "unknown"),
+                                    "category": ingredient.get("type"),
+                                    "glycemic_index": ingredient.get("glycemic_index"),
+                                }
+                            )
+            except (json.JSONDecodeError, TypeError):
+                pass
+
+            orders.append(
+                {
+                    "order_id": f"meal_{meal.id}",
+                    "timestamp_ms": meal.timestamp_ms,
+                    "source": "doordash",
+                    "items": item_names,
+                }
+            )
+
+        return MCPToolResult(data={"orders": orders}, source="doordash_server")
 
 
 class StateStoreMCPAdapter:

@@ -9,9 +9,11 @@ import httpx
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config import settings
 from app.models.grocery_receipt import GroceryItem, GroceryReceipt
 from app.models.meal_event import MealEvent
 from app.schemas.grocery import CrossReferenceResult, GroceryItemResponse
+from app.services.mcp_stdio import call_mcp_tool_stdio
 
 logger = logging.getLogger(__name__)
 
@@ -21,6 +23,98 @@ class GroceryService:
 
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
+
+    async def fetch_receipts_via_mcp(
+        self,
+        command: str,
+        tool_name: str,
+        source: str,
+        days: int = 7,
+    ) -> list[dict[str, Any]]:
+        """Fetch receipt/order payloads via MCP stdio and normalize shape."""
+        if not command.strip():
+            return []
+
+        try:
+            payload = await call_mcp_tool_stdio(
+                command=command,
+                tool_name=tool_name,
+                arguments={"days": days},
+                timeout_seconds=settings.mcp_stdio_timeout_seconds,
+            )
+        except Exception:
+            logger.exception("%s MCP stdio fetch failed", source)
+            return []
+
+        if not payload:
+            return []
+
+        raw_orders: list[dict[str, Any]] = []
+        if isinstance(payload, dict):
+            if isinstance(payload.get("orders"), list):
+                raw_orders = [o for o in payload["orders"] if isinstance(o, dict)]
+            elif isinstance(payload.get("receipts"), list):
+                raw_orders = [o for o in payload["receipts"] if isinstance(o, dict)]
+            elif isinstance(payload.get("items"), list):
+                raw_orders = [o for o in payload["items"] if isinstance(o, dict)]
+        elif isinstance(payload, list):
+            raw_orders = [o for o in payload if isinstance(o, dict)]
+
+        normalized: list[dict[str, Any]] = []
+        for order in raw_orders:
+            raw_items = order.get("items") or order.get("line_items") or []
+            items: list[dict[str, Any]] = []
+            if isinstance(raw_items, list):
+                for item in raw_items:
+                    if not isinstance(item, dict):
+                        continue
+                    items.append(
+                        {
+                            "name": item.get("name")
+                            or item.get("item_name")
+                            or item.get("title")
+                            or "unknown",
+                            "quantity": item.get("quantity"),
+                            "unit": item.get("unit"),
+                            "price_cents": item.get("price_cents")
+                            or item.get("price")
+                            or item.get("total_price_cents"),
+                            "glycemic_index": item.get("glycemic_index"),
+                            "category": item.get("category"),
+                        }
+                    )
+
+            normalized.append(
+                {
+                    "id": order.get("id")
+                    or order.get("order_id")
+                    or order.get("receipt_id"),
+                    "created_at_ms": order.get("created_at_ms")
+                    or order.get("timestamp_ms")
+                    or order.get("order_timestamp_ms"),
+                    "total_cents": order.get("total_cents")
+                    or order.get("total_price_cents"),
+                    "items": items,
+                }
+            )
+
+        return [o for o in normalized if o.get("id")]
+
+    async def fetch_instacart_receipts_mcp(self, days: int = 7) -> list[dict[str, Any]]:
+        return await self.fetch_receipts_via_mcp(
+            command=settings.instacart_mcp_stdio_command,
+            tool_name=settings.instacart_mcp_tool_name,
+            source="instacart",
+            days=days,
+        )
+
+    async def fetch_doordash_receipts_mcp(self, days: int = 7) -> list[dict[str, Any]]:
+        return await self.fetch_receipts_via_mcp(
+            command=settings.doordash_mcp_stdio_command,
+            tool_name=settings.doordash_mcp_tool_name,
+            source="doordash",
+            days=days,
+        )
 
     async def fetch_instacart_receipts(self, session_cookie: str) -> list[dict[str, Any]]:
         """Fetch recent Instacart orders using stored session cookie.

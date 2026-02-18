@@ -46,20 +46,41 @@ class GroceryWorker:
         async with async_session() as session:
             service = GroceryService(session)
 
-            if settings.instacart_session_cookie:
-                orders = await service.fetch_instacart_receipts(
+            instacart_orders: list[dict] = []
+            if settings.instacart_mcp_stdio_command:
+                instacart_orders = await service.fetch_instacart_receipts_mcp()
+            elif settings.instacart_session_cookie:
+                instacart_orders = await service.fetch_instacart_receipts(
                     settings.instacart_session_cookie
                 )
-                for order in orders:
-                    await service.store_receipt(
-                        source="instacart",
-                        order_id=order.get("id", ""),
-                        order_timestamp_ms=order.get("created_at_ms"),
-                        total_price_cents=order.get("total_cents"),
-                        items=order.get("items", []),
-                        raw_html=None,
-                    )
-                logger.info("Fetched %d Instacart orders", len(orders))
+
+            for order in instacart_orders:
+                await service.store_receipt(
+                    source="instacart",
+                    order_id=str(order.get("id", "")),
+                    order_timestamp_ms=order.get("created_at_ms"),
+                    total_price_cents=order.get("total_cents"),
+                    items=order.get("items", []),
+                    raw_html=None,
+                )
+            if instacart_orders:
+                logger.info("Fetched %d Instacart orders", len(instacart_orders))
+
+            doordash_orders: list[dict] = []
+            if settings.doordash_mcp_stdio_command:
+                doordash_orders = await service.fetch_doordash_receipts_mcp()
+
+            for order in doordash_orders:
+                await service.store_receipt(
+                    source="doordash",
+                    order_id=str(order.get("id", "")),
+                    order_timestamp_ms=order.get("created_at_ms"),
+                    total_price_cents=order.get("total_cents"),
+                    items=order.get("items", []),
+                    raw_html=None,
+                )
+            if doordash_orders:
+                logger.info("Fetched %d DoorDash orders", len(doordash_orders))
 
     async def fetch_now(self) -> None:
         """Trigger an immediate fetch cycle (for the API endpoint)."""

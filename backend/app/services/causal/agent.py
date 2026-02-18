@@ -38,6 +38,7 @@ from app.services.causal.guardrails import (
 from app.services.causal.mcp_adapters import (
     AppleHealthAdapter,
     CGMSteloAdapter,
+    DoordashServerAdapter,
     InstacartServerAdapter,
     MCPToolResult,
     RotimaticServerAdapter,
@@ -93,6 +94,7 @@ class CausalAgent:
         self.cgm = CGMSteloAdapter(session)
         self.rotimatic = RotimaticServerAdapter(session)
         self.instacart = InstacartServerAdapter(session)
+        self.doordash = DoordashServerAdapter(session)
         self.state_store = StateStoreMCPAdapter(session)
         self.dag = CausalDAG()
 
@@ -234,6 +236,17 @@ class CausalAgent:
                 observations.append(
                     Observation(
                         source="instacart_server",
+                        data=result.data,
+                        supports_hypothesis="metabolic",
+                    )
+                )
+
+            if hyp.source_type == "metabolic" and "doordash_server" not in existing_results:
+                result = await self.doordash.get_recent_orders()
+                existing_results["doordash_server"] = result
+                observations.append(
+                    Observation(
+                        source="doordash_server",
                         data=result.data,
                         supports_hypothesis="metabolic",
                     )
