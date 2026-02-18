@@ -1,7 +1,9 @@
 import SwiftUI
 import VITACore
 import CausalityEngine
+#if os(iOS)
 import UserNotifications
+#endif
 
 @main
 struct VITAApp: App {
@@ -12,6 +14,7 @@ struct VITAApp: App {
         WindowGroup {
             ContentView(appState: appState)
                 .onAppear {
+                    #if os(iOS)
                     UNUserNotificationCenter.current().delegate = NotificationDelegate.shared
                     NotificationDelegate.shared.onFullStoryTap = { userInfo in
                         if let symptom = userInfo["symptom"] as? String {
@@ -23,12 +26,14 @@ struct VITAApp: App {
                     Task {
                         _ = await VITANotificationManager.shared.requestPermission()
                     }
+                    #endif
                 }
         }
     }
 }
 
 /// Handles notification delegate callbacks for deep-linking.
+#if os(iOS)
 final class NotificationDelegate: NSObject, UNUserNotificationCenterDelegate {
     static let shared = NotificationDelegate()
     var onFullStoryTap: (([AnyHashable: Any]) -> Void)?
@@ -56,3 +61,4 @@ final class NotificationDelegate: NSObject, UNUserNotificationCenterDelegate {
         completionHandler([.banner, .sound])
     }
 }
+#endif

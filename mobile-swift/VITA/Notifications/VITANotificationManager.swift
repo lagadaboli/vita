@@ -1,5 +1,7 @@
 import Foundation
+#if os(iOS)
 import UserNotifications
+#endif
 import CausalityEngine
 
 /// Manages local iOS notifications for causal explanations.
@@ -14,6 +16,7 @@ final class VITANotificationManager: NSObject, Sendable {
 
     /// Request notification permission. Call during onboarding.
     func requestPermission() async -> Bool {
+        #if os(iOS)
         do {
             let granted = try await UNUserNotificationCenter.current()
                 .requestAuthorization(options: [.alert, .sound, .badge])
@@ -29,6 +32,9 @@ final class VITANotificationManager: NSObject, Sendable {
             #endif
             return false
         }
+        #else
+        return false
+        #endif
     }
 
     /// Schedule a local notification for a causal explanation (Tier 2).
@@ -37,6 +43,7 @@ final class VITANotificationManager: NSObject, Sendable {
         for explanation: CausalExplanation,
         counterfactuals: [Counterfactual]
     ) {
+        #if os(iOS)
         let content = UNMutableNotificationContent()
         content.title = "VITA Insight"
         content.body = explanation.narrative
@@ -66,9 +73,11 @@ final class VITANotificationManager: NSObject, Sendable {
             }
             #endif
         }
+        #endif
     }
 
     private func registerCategories() async {
+        #if os(iOS)
         let viewAction = UNNotificationAction(
             identifier: "VIEW_FULL_STORY",
             title: "View Full Story",
@@ -83,5 +92,6 @@ final class VITANotificationManager: NSObject, Sendable {
         )
 
         UNUserNotificationCenter.current().setNotificationCategories([category])
+        #endif
     }
 }

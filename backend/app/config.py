@@ -46,6 +46,13 @@ class Settings(BaseSettings):
     twilio_from_number: str = ""
     twilio_escalation_to_number: str = ""
 
+    # Causal engine
+    causal_agent_max_iterations: int = 3
+    causal_confidence_threshold: float = 0.7
+    hrv_safety_threshold_ms: float = 20.0
+    metabolic_debt_window_hours: int = 24
+    digital_debt_window_hours: int = 6
+
     model_config = {"env_prefix": "VITA_"}
 
 

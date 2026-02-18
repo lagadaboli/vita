@@ -9,6 +9,7 @@ from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_session
+from app.models.health_event import HealthEvent
 from app.models.meal_event import MealEvent
 from app.schemas.meal import Ingredient, MealEventResponse
 from app.schemas.sync import SyncPullResponse, SyncPushRequest, SyncStatusResponse
@@ -81,15 +82,30 @@ async def sync_pull(
 
 
 @router.post("/push")
-async def sync_push(req: SyncPushRequest):
-    """Receive glucose/HRV data pushed from mobile.
+async def sync_push(
+    req: SyncPushRequest,
+    session: AsyncSession = Depends(get_session),
+):
+    """Receive glucose/HRV data pushed from mobile and persist as HealthEvent rows."""
+    rows = []
+    for evt in req.events:
+        row = HealthEvent(
+            event_type=evt.type,
+            timestamp_ms=evt.timestamp_ms,
+            value=evt.value,
+            unit=evt.unit,
+            metadata_json=json.dumps(evt.metadata) if evt.metadata else None,
+            processed=0,
+        )
+        rows.append(row)
 
-    Stores health events for causal alignment with meal data.
-    Currently logs receipt; full storage deferred to CausalityEngine integration.
-    """
+    if rows:
+        session.add_all(rows)
+        await session.commit()
+
     return {
-        "received": len(req.events),
-        "message": "Health events received for causal alignment",
+        "received": len(rows),
+        "message": "Health events persisted for causal alignment",
     }
 
 
