@@ -4,11 +4,8 @@ import VITADesignSystem
 struct TimelineView: View {
     var appState: AppState
     @State private var viewModel = TimelineViewModel()
-    @State private var isRefreshing = false
-
     private var isComponentLoading: Bool {
         !appState.isLoaded
-            || ((isRefreshing || appState.isHealthSyncing) && viewModel.filteredEvents.isEmpty && !viewModel.hasLoaded)
     }
 
     var body: some View {
@@ -46,38 +43,13 @@ struct TimelineView: View {
                 guard appState.isLoaded else { return }
                 await refreshTimeline(force: false)
             }
-            .task(id: appState.lastHealthRefreshAt) {
-                guard appState.isLoaded else { return }
+            .onAppear {
                 viewModel.load(from: appState)
             }
-            .onAppear {
-                Task {
-                    await refreshTimeline(force: false)
-                }
-            }
-            .onChange(of: appState.screenTimeStatus) { _, _ in
-                Task {
-                    await refreshTimeline(force: false)
-                }
-            }
             .refreshable {
-                await refreshTimeline(force: true)
+                viewModel.load(from: appState)
             }
         }
     }
 
-    @MainActor
-    private func refreshTimeline(force: Bool) async {
-        guard appState.isLoaded else { return }
-        viewModel.load(from: appState)
-        if force {
-            isRefreshing = true
-        }
-
-        await appState.refreshHealthDataIfNeeded(maxAge: 150, force: force)
-        viewModel.load(from: appState)
-        if force {
-            isRefreshing = false
-        }
-    }
 }

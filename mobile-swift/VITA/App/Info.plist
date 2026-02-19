@@ -2,38 +2,30 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-	<key>CFBundleDevelopmentRegion</key>
-	<string>$(DEVELOPMENT_LANGUAGE)</string>
-	<key>CFBundleDisplayName</key>
-	<string>VITA</string>
-	<key>CFBundleExecutable</key>
-	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>
 	<string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
-	<key>CFBundleInfoDictionaryVersion</key>
-	<string>6.0</string>
+	<key>CFBundleExecutable</key>
+	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleName</key>
 	<string>VITA</string>
-	<key>CFBundlePackageType</key>
-	<string>APPL</string>
-	<key>CFBundleShortVersionString</key>
-	<string>1.0.0</string>
+	<key>CFBundleDisplayName</key>
+	<string>VITA</string>
 	<key>CFBundleVersion</key>
-	<string>1</string>
-	<key>NSHealthShareUsageDescription</key>
-	<string>VITA needs access to your health data to analyze correlations between your meals, sleep, heart rate variability, and glucose levels. All data is processed locally on your device.</string>
-	<key>NSHealthUpdateUsageDescription</key>
-	<string>VITA may write health insights back to HealthKit for your reference.</string>
-	<key>NSLocationWhenInUseUsageDescription</key>
-	<string>VITA uses your location to fetch local weather, AQI, and pollen conditions for accurate health context.</string>
-	<key>NSLocalNetworkUsageDescription</key>
-	<string>VITA connects to your local backend server during development to sync delivery and grocery events.</string>
-	<key>NSAppTransportSecurity</key>
+	<string>$(CURRENT_PROJECT_VERSION)</string>
+	<key>CFBundleShortVersionString</key>
+	<string>$(MARKETING_VERSION)</string>
+	<key>CFBundlePackageType</key>
+	<string>$(PRODUCT_BUNDLE_PACKAGE_TYPE)</string>
+	<key>CFBundleInfoDictionaryVersion</key>
+	<string>6.0</string>
+	<key>UIApplicationSceneManifest</key>
 	<dict>
-		<key>NSAllowsArbitraryLoads</key>
-		<true/>
+		<key>UIApplicationSupportsMultipleScenes</key>
+		<false/>
 	</dict>
-	<key>UIBackgroundModes</key>
+	<key>UILaunchScreen</key>
+	<dict/>
+	<key>UISupportedInterfaceOrientations</key>
 	<array>
 		<string>UIInterfaceOrientationPortrait</string>
 	</array>
@@ -44,19 +36,5 @@
 		<string>UIInterfaceOrientationLandscapeLeft</string>
 		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
-	<key>UILaunchScreen</key>
-	<dict/>
-	<key>UISupportedInterfaceOrientations</key>
-	<array>
-		<string>UIInterfaceOrientationPortrait</string>
-		<string>UIInterfaceOrientationLandscapeLeft</string>
-		<string>UIInterfaceOrientationLandscapeRight</string>
-	</array>
-	<key>VITABackendURL</key>
-	<string>http://127.0.0.1:8000</string>
-	<key>VITAMockRotimaticEnabled</key>
-	<true/>
-	<key>VITAMockInstantPotEnabled</key>
-	<true/>
 </dict>
 </plist>

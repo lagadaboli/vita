@@ -6,12 +6,10 @@ import VITACore
 struct DashboardView: View {
     var appState: AppState
     @State private var viewModel = DashboardViewModel()
-    @State private var isRefreshing = false
     @State private var hasPerformedInitialLoad = false
 
     private var isComponentLoading: Bool {
         !appState.isLoaded
-            || ((appState.isHealthSyncing || isRefreshing) && !viewModel.hasAnyData && !viewModel.hasLoaded)
     }
 
     var body: some View {
@@ -77,7 +75,7 @@ struct DashboardView: View {
                 MetricHistoryDetailView(
                     metric: metric,
                     viewModel: viewModel,
-                    isLoading: appState.isHealthSyncing
+                    isLoading: false
                 )
             }
         }
@@ -87,14 +85,6 @@ struct DashboardView: View {
     private func refreshDashboard(force: Bool) async {
         guard appState.isLoaded else { return }
         viewModel.load(from: appState)
-        if force {
-            isRefreshing = true
-        }
-        await appState.refreshHealthDataIfNeeded(maxAge: 120, force: force)
-        viewModel.load(from: appState)
-        if force {
-            isRefreshing = false
-        }
     }
 }
 
