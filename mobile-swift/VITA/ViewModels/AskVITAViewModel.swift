@@ -41,11 +41,6 @@ final class AskVITAViewModel {
             // Fetch glucose + meal data for annotated chart
             loadChartData(appState: appState)
 
-            // Tier 1: Watch nudge for high-confidence results
-            if let top = explanations.first, top.confidence >= 0.65 {
-                await sendWatchNudge(explanation: top, appState: appState)
-            }
-
             // Tier 4: SMS escalation check
             await checkEscalation(appState: appState)
         } catch {
@@ -93,30 +88,6 @@ final class AskVITAViewModel {
             print("[AskVITAViewModel] Chart data load failed: \(error)")
             #endif
         }
-    }
-
-    // MARK: - Watch Nudge (Tier 1)
-
-    private func sendWatchNudge(explanation: CausalExplanation, appState: AppState) async {
-        let nudgeGenerator = NudgeGenerator()
-        let nudgeText = await nudgeGenerator.generate(
-            symptom: explanation.symptom,
-            explanation: explanation,
-            llm: nil // Watch nudge uses template — LLM on phone only for full narrative
-        )
-
-        let payload = WatchNudgePayload(
-            symptom: explanation.symptom,
-            nudgeText: nudgeText,
-            actionText: counterfactuals.first?.description ?? "Take a short break",
-            confidence: explanation.confidence,
-            timestamp: Date(),
-            causeType: explanation.causalChain.first ?? "unknown"
-        )
-
-        #if canImport(WatchConnectivity)
-        WatchConnectivityBridge.shared.sendNudge(payload)
-        #endif
     }
 
     // MARK: - SMS Escalation (Tier 4)

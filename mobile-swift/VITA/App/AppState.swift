@@ -1,16 +1,7 @@
 import SwiftUI
 import VITACore
 import CausalityEngine
-import HealthKitBridge
-import ConsumptionBridge
-import EnvironmentBridge
-import IntentionalityTracker
 
-#if canImport(HealthKit)
-import HealthKit
-#endif
-
-/// Central app state managing database, health graph, and causality engine.
 @MainActor
 @Observable
 final class AppState {
@@ -101,20 +92,12 @@ final class AppState {
             let db = try VITADatabase.inMemory()
             self.database = db
             self.healthGraph = HealthGraph(database: db)
-
-            #if canImport(MLXLLM) && canImport(Metal)
-            let llm = MLXLLMService()
-            self.llmService = llm
-            self.causalityEngine = CausalityEngine(database: db, healthGraph: healthGraph, llm: llm)
-            #else
             self.causalityEngine = CausalityEngine(database: db, healthGraph: healthGraph)
-            #endif
         } catch {
             fatalError("Failed to initialize database: \(error)")
         }
     }
 
-    /// Initialize all subsystems, falling back to sample data if unavailable.
     func initialize() async {
         guard !isLoaded else { return }
 
