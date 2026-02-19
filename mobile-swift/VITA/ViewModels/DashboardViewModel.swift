@@ -90,6 +90,16 @@ final class DashboardViewModel {
         let timestamp: Date
     }
 
+    var hasAnyData: Bool {
+        !glucoseReadings.isEmpty
+            || currentHRV > 0
+            || currentHR > 0
+            || sleepHours > 0
+            || steps > 0
+            || currentWeight > 0
+            || dopamineDebt > 0
+    }
+
     func load(from appState: AppState) {
         let calendar = Calendar.current
         let now = Date()
@@ -147,8 +157,8 @@ final class DashboardViewModel {
             hrvTrend = .stable
         }
 
-        // Load resting heart rate (prefer watch-source samples when available).
-        if let samples = try? appState.healthGraph.querySamples(type: .restingHeartRate, from: weekAgo, to: now) {
+        // Load heart rate with fallback to resting heart rate.
+        if let samples = fetchHeartRateSamples(from: appState, from: weekAgo, to: now) {
             let preferredSamples = preferredWatchSamples(from: samples)
             heartRateHistory = preferredSamples.map {
                 MetricHistoryPoint(timestamp: $0.timestamp, value: $0.value)
@@ -275,6 +285,24 @@ final class DashboardViewModel {
         default:
             return "Apple Health (Apple Watch preferred)"
         }
+    }
+
+    private func fetchHeartRateSamples(
+        from appState: AppState,
+        from startDate: Date,
+        to endDate: Date
+    ) -> [PhysiologicalSample]? {
+        if let heartRate = try? appState.healthGraph.querySamples(type: .heartRate, from: startDate, to: endDate),
+           !heartRate.isEmpty {
+            return heartRate
+        }
+
+        if let resting = try? appState.healthGraph.querySamples(type: .restingHeartRate, from: startDate, to: endDate),
+           !resting.isEmpty {
+            return resting
+        }
+
+        return nil
     }
 
     private func computeHealthScore() {

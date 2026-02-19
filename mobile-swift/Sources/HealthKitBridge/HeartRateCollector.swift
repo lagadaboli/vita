@@ -9,7 +9,7 @@ import VITACore
 public final class HeartRateCollector: @unchecked Sendable {
     private let database: VITADatabase
     private let healthGraph: HealthGraph
-    private let metricKey = "resting_hr"
+    private let metricKey = "heart_rate"
 
     #if canImport(HealthKit)
     private let healthStore: HKHealthStore
@@ -35,7 +35,7 @@ public final class HeartRateCollector: @unchecked Sendable {
     #if canImport(HealthKit)
     /// Start observing resting heart rate samples with background delivery.
     public func startObserving() throws {
-        let hrType = HKQuantityType.quantityType(forIdentifier: .restingHeartRate)!
+        let hrType = HKQuantityType.quantityType(forIdentifier: .heartRate)!
 
         let observer = HKObserverQuery(sampleType: hrType, predicate: nil) { [weak self] _, completionHandler, error in
             guard error == nil else {
@@ -62,15 +62,16 @@ public final class HeartRateCollector: @unchecked Sendable {
 
     /// Fetch and process resting heart rate data since last sync.
     public func performIncrementalSync() async throws {
-        let hrType = HKQuantityType.quantityType(forIdentifier: .restingHeartRate)!
+        let hrType = HKQuantityType.quantityType(forIdentifier: .heartRate)!
 
         let syncState = try HealthKitSyncState.load(for: metricKey, from: database)
         let anchor = syncState?.anchorData.flatMap { try? NSKeyedUnarchiver.unarchivedObject(ofClass: HKQueryAnchor.self, from: $0) }
+        let predicate = incrementalPredicate(anchor: anchor)
 
         try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
             let query = HKAnchoredObjectQuery(
                 type: hrType,
-                predicate: nil,
+                predicate: predicate,
                 anchor: anchor,
                 limit: HKObjectQueryNoLimit
             ) { [weak self] _, samples, _, newAnchor, error in
@@ -106,7 +107,7 @@ public final class HeartRateCollector: @unchecked Sendable {
             let isWatchSample = sampleMetadata["is_watch_sample"] == "true"
 
             var physiologicalSample = PhysiologicalSample(
-                metricType: .restingHeartRate,
+                metricType: .heartRate,
                 value: bpm,
                 unit: "bpm",
                 timestamp: quantitySample.startDate,
@@ -151,6 +152,12 @@ public final class HeartRateCollector: @unchecked Sendable {
         return sourceName.contains("watch")
             || productType.contains("watch")
             || deviceModel.contains("watch")
+    }
+
+    private func incrementalPredicate(anchor: HKQueryAnchor?) -> NSPredicate? {
+        guard anchor == nil else { return nil }
+        let lookbackStart = Calendar.current.date(byAdding: .day, value: -30, to: Date()) ?? Date.distantPast
+        return HKQuery.predicateForSamples(withStart: lookbackStart, end: nil, options: .strictStartDate)
     }
     #endif
 }

@@ -75,7 +75,7 @@ public final class ScreenTimeTracker: @unchecked Sendable {
     /// Read zombie scrolling data written by the extension to shared UserDefaults.
     /// Returns a BehavioralEvent if data is available, nil otherwise.
     public func readZombieData() -> BehavioralEvent? {
-        guard let defaults = UserDefaults(suiteName: Self.appGroupID) else { return nil }
+        guard let defaults = sharedDefaults() else { return nil }
 
         let duration = defaults.double(forKey: UserDefaultsKeys.lastZombieDuration)
         guard duration > 0 else { return nil }
@@ -118,10 +118,17 @@ public final class ScreenTimeTracker: @unchecked Sendable {
         try healthGraph.ingest(&event)
 
         // Clear the shared defaults
-        if let defaults = UserDefaults(suiteName: Self.appGroupID) {
+        if let defaults = sharedDefaults() {
             defaults.removeObject(forKey: UserDefaultsKeys.lastZombieDuration)
             defaults.removeObject(forKey: UserDefaultsKeys.lastZombieCategory)
             defaults.removeObject(forKey: UserDefaultsKeys.lastZombieTimestamp)
         }
+    }
+
+    private func sharedDefaults() -> UserDefaults? {
+        if let suite = UserDefaults(suiteName: Self.appGroupID) {
+            return suite
+        }
+        return .standard
     }
 }

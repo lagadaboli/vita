@@ -61,11 +61,12 @@ public final class HRVCollector: @unchecked Sendable {
         // Load persisted anchor
         let syncState = try HealthKitSyncState.load(for: metricKey, from: database)
         let anchor = syncState?.anchorData.flatMap { try? NSKeyedUnarchiver.unarchivedObject(ofClass: HKQueryAnchor.self, from: $0) }
+        let predicate = incrementalPredicate(anchor: anchor)
 
         try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
             let query = HKAnchoredObjectQuery(
                 type: hrvType,
-                predicate: nil,
+                predicate: predicate,
                 anchor: anchor,
                 limit: HKObjectQueryNoLimit
             ) { [weak self] _, samples, _, newAnchor, error in
@@ -154,6 +155,12 @@ public final class HRVCollector: @unchecked Sendable {
         return sourceName.contains("watch")
             || productType.contains("watch")
             || deviceModel.contains("watch")
+    }
+
+    private func incrementalPredicate(anchor: HKQueryAnchor?) -> NSPredicate? {
+        guard anchor == nil else { return nil }
+        let lookbackStart = Calendar.current.date(byAdding: .day, value: -30, to: Date()) ?? Date.distantPast
+        return HKQuery.predicateForSamples(withStart: lookbackStart, end: nil, options: .strictStartDate)
     }
     #endif
 }

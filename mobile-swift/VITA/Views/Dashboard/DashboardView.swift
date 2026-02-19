@@ -6,42 +6,60 @@ import VITACore
 struct DashboardView: View {
     var appState: AppState
     @State private var viewModel = DashboardViewModel()
+    @State private var isRefreshing = false
 
     var body: some View {
         NavigationStack {
-            ScrollView {
-                VStack(spacing: VITASpacing.xl) {
-                    // Health Score Ring
-                    HealthScoreGauge(score: viewModel.healthScore)
-                        .padding(.top, VITASpacing.md)
+            Group {
+                if !appState.isLoaded || ((isRefreshing || appState.isHealthSyncing) && !viewModel.hasAnyData) {
+                    LoadingStateView(
+                        title: "Loading Dashboard",
+                        message: "Fetching your latest Health and Screen Time metrics."
+                    )
+                } else {
+                    ScrollView {
+                        VStack(spacing: VITASpacing.xl) {
+                            // Health Score Ring
+                            HealthScoreGauge(score: viewModel.healthScore)
+                                .padding(.top, VITASpacing.md)
 
-                    // Mini Glucose Chart
-                    MiniGlucoseChart(dataPoints: viewModel.glucoseReadings)
+                            // Mini Glucose Chart
+                            MiniGlucoseChart(dataPoints: viewModel.glucoseReadings)
 
-                    // Metric Cards Row
-                    MetricCardRow(viewModel: viewModel)
+                            // Metric Cards Row
+                            MetricCardRow(viewModel: viewModel)
 
-                    // Insights
-                    VStack(alignment: .leading, spacing: VITASpacing.md) {
-                        Text("Insights")
-                            .font(VITATypography.title3)
-                            .padding(.horizontal, VITASpacing.lg)
+                            if !viewModel.hasAnyData {
+                                EmptyDataStateView(
+                                    title: "No Health Data Yet",
+                                    message: "Open Apple Health permissions for VITA, then pull to refresh."
+                                )
+                                .padding(.horizontal, VITASpacing.lg)
+                            }
 
-                        ForEach(viewModel.insights) { insight in
-                            InsightAlertCard(insight: insight)
+                            // Insights
+                            VStack(alignment: .leading, spacing: VITASpacing.md) {
+                                Text("Insights")
+                                    .font(VITATypography.title3)
+                                    .padding(.horizontal, VITASpacing.lg)
+
+                                ForEach(viewModel.insights) { insight in
+                                    InsightAlertCard(insight: insight)
+                                        .padding(.horizontal, VITASpacing.lg)
+                                }
+                            }
+
+                            // Integration Status
+                            IntegrationStatusRow()
                                 .padding(.horizontal, VITASpacing.lg)
                         }
+                        .padding(.bottom, VITASpacing.xxl)
                     }
-
-                    // Integration Status
-                    IntegrationStatusRow()
-                        .padding(.horizontal, VITASpacing.lg)
                 }
-                .padding(.bottom, VITASpacing.xxl)
             }
             .background(VITAColors.background)
             .navigationTitle("VITA")
-            .task {
+            .task(id: appState.isLoaded) {
                 await refreshDashboard()
             }
             .refreshable {
@@ -55,6 +73,9 @@ struct DashboardView: View {
 
     @MainActor
     private func refreshDashboard() async {
+        guard appState.isLoaded else { return }
+        isRefreshing = true
+        defer { isRefreshing = false }
         await appState.refreshHealthData()
         viewModel.load(from: appState)
     }

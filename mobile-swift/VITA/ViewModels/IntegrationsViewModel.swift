@@ -12,6 +12,8 @@ final class IntegrationsViewModel {
     var watchSteps: Int = 0
     var watchConnectionStatus: ConnectionStatus = .syncing
     var watchConnectionDetail: String = "Checking status..."
+    var screenTimeStatusMessage: String = ""
+    var isScreenTimeAuthorized = false
 
     // DoorDash orders
     var doordashOrders: [DoorDashOrder] = []
@@ -113,6 +115,18 @@ final class IntegrationsViewModel {
         let dayStart = calendar.startOfDay(for: now)
         let weekAgo = calendar.date(byAdding: .day, value: -7, to: now) ?? now
 
+        switch appState.screenTimeStatus {
+        case .authorized:
+            isScreenTimeAuthorized = true
+            screenTimeStatusMessage = "Screen Time monitoring is active."
+        case .unavailable(let reason):
+            isScreenTimeAuthorized = false
+            screenTimeStatusMessage = "Screen Time access unavailable: \(reason)"
+        case .notConfigured:
+            isScreenTimeAuthorized = false
+            screenTimeStatusMessage = "Screen Time monitoring is not configured."
+        }
+
         // Apple Watch connectivity status.
         #if canImport(WatchConnectivity)
         let watchStatus = WatchConnectivityBridge.shared.connectionStatus()
@@ -143,7 +157,7 @@ final class IntegrationsViewModel {
         // Apple Watch / HealthKit-backed metrics.
         var latestWatchSync: Date?
 
-        if let hrvSamples = try? appState.healthGraph.querySamples(type: .hrvSDNN, from: dayStart, to: now) {
+        if let hrvSamples = try? appState.healthGraph.querySamples(type: .hrvSDNN, from: weekAgo, to: now) {
             let preferredSamples = preferredWatchSamples(from: hrvSamples)
             if let latest = preferredSamples.last {
                 watchHRV = latest.value
@@ -151,7 +165,7 @@ final class IntegrationsViewModel {
             }
         }
 
-        if let hrSamples = try? appState.healthGraph.querySamples(type: .restingHeartRate, from: dayStart, to: now) {
+        if let hrSamples = fetchHeartRateSamples(from: appState, from: weekAgo, to: now) {
             let preferredSamples = preferredWatchSamples(from: hrSamples)
             if let latest = preferredSamples.last {
                 watchHR = latest.value
@@ -334,6 +348,24 @@ final class IntegrationsViewModel {
             return true
         }
         return false
+    }
+
+    private func fetchHeartRateSamples(
+        from appState: AppState,
+        from startDate: Date,
+        to endDate: Date
+    ) -> [PhysiologicalSample]? {
+        if let heartRate = try? appState.healthGraph.querySamples(type: .heartRate, from: startDate, to: endDate),
+           !heartRate.isEmpty {
+            return heartRate
+        }
+
+        if let resting = try? appState.healthGraph.querySamples(type: .restingHeartRate, from: startDate, to: endDate),
+           !resting.isEmpty {
+            return resting
+        }
+
+        return nil
     }
 
     private func maxDate(_ lhs: Date?, _ rhs: Date?) -> Date? {

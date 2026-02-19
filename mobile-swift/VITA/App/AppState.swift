@@ -19,12 +19,21 @@ final class AppState {
         case live
     }
 
+    enum ScreenTimeStatus: Equatable {
+        case notConfigured
+        case authorized
+        case unavailable(String)
+    }
+
     let database: VITADatabase
     let healthGraph: HealthGraph
     let causalityEngine: CausalityEngine
     var isLoaded = false
+    var isHealthSyncing = false
     var loadError: String?
     var dataMode: DataMode = .live
+    var lastHealthRefreshAt: Date?
+    var screenTimeStatus: ScreenTimeStatus = .notConfigured
 
     #if canImport(HealthKit)
     private var healthKitManager: HealthKitManager?
@@ -100,6 +109,7 @@ final class AppState {
         guard !isLoaded else { return }
 
         var healthKitAvailable = false
+        isHealthSyncing = true
 
         // 1. HealthKit
         #if canImport(HealthKit)
@@ -130,6 +140,7 @@ final class AppState {
                 try? await glucose.performIncrementalSync()
                 try? await sleep.performIncrementalSync()
                 try? await steps.performIncrementalSync()
+                lastHealthRefreshAt = Date()
 
                 self.hrvCollector = hrv
                 self.heartRateCollector = hr
@@ -155,8 +166,10 @@ final class AppState {
         do {
             try await tracker.requestAuthorization()
             try tracker.startMonitoring()
+            screenTimeStatus = .authorized
             ingestPendingScreenTimeData()
         } catch {
+            screenTimeStatus = .unavailable(error.localizedDescription)
             // Screen Time is non-critical; continue without it
             #if DEBUG
             print("[AppState] Screen Time setup failed: \(error.localizedDescription)")
@@ -200,6 +213,7 @@ final class AppState {
         }
         #endif
 
+        isHealthSyncing = false
         isLoaded = true
     }
 
@@ -389,6 +403,9 @@ final class AppState {
 
     /// Force a foreground HealthKit sync so dashboard metrics match Apple Health as closely as possible.
     func refreshHealthData() async {
+        isHealthSyncing = true
+        defer { isHealthSyncing = false }
+
         #if canImport(HealthKit)
         guard healthKitManager != nil else {
             ingestPendingScreenTimeData()
@@ -400,6 +417,7 @@ final class AppState {
         try? await glucoseCollector?.performIncrementalSync()
         try? await sleepCollector?.performIncrementalSync()
         try? await stepCountCollector?.performIncrementalSync()
+        lastHealthRefreshAt = Date()
         #endif
 
         ingestPendingScreenTimeData()

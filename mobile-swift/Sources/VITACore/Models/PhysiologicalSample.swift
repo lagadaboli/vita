@@ -36,6 +36,7 @@ public struct PhysiologicalSample: Codable, Identifiable, Sendable {
 extension PhysiologicalSample {
     public enum MetricType: String, Codable, Sendable, DatabaseValueConvertible {
         case hrvSDNN = "hrv_sdnn"
+        case heartRate = "heart_rate"
         case restingHeartRate = "resting_hr"
         case sleepAnalysis = "sleep_analysis"
         case bloodGlucose = "blood_glucose"

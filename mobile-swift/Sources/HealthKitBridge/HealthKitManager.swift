@@ -17,6 +17,7 @@ public final class HealthKitManager: @unchecked Sendable {
     /// All HealthKit types VITA needs to read.
     public static let requiredReadTypes: Set<String> = [
         "HKQuantityTypeIdentifierHeartRateVariabilitySDNN",
+        "HKQuantityTypeIdentifierHeartRate",
         "HKQuantityTypeIdentifierRestingHeartRate",
         "HKQuantityTypeIdentifierBodyMass",
         "HKQuantityTypeIdentifierBloodGlucose",
@@ -43,6 +44,7 @@ public final class HealthKitManager: @unchecked Sendable {
 
         let readTypes: Set<HKObjectType> = [
             HKQuantityType.quantityType(forIdentifier: .heartRateVariabilitySDNN)!,
+            HKQuantityType.quantityType(forIdentifier: .heartRate)!,
             HKQuantityType.quantityType(forIdentifier: .restingHeartRate)!,
             HKQuantityType.quantityType(forIdentifier: .bodyMass)!,
             HKQuantityType.quantityType(forIdentifier: .bloodGlucose)!,
@@ -61,6 +63,7 @@ public final class HealthKitManager: @unchecked Sendable {
     public func enableBackgroundDelivery() async throws {
         let criticalTypes: [(HKObjectType, HKUpdateFrequency)] = [
             (HKQuantityType.quantityType(forIdentifier: .heartRateVariabilitySDNN)!, .immediate),
+            (HKQuantityType.quantityType(forIdentifier: .heartRate)!, .hourly),
             (HKQuantityType.quantityType(forIdentifier: .restingHeartRate)!, .immediate),
             (HKQuantityType.quantityType(forIdentifier: .bloodGlucose)!, .immediate),
             (HKCategoryType.categoryType(forIdentifier: .sleepAnalysis)!, .hourly),

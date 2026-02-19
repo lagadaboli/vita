@@ -4,42 +4,59 @@ import VITADesignSystem
 struct IntegrationsView: View {
     var appState: AppState
     @State private var viewModel = IntegrationsViewModel()
+    @State private var isRefreshing = false
     private let refreshTimer = Timer.publish(every: 60, on: .main, in: .common).autoconnect()
 
     var body: some View {
         NavigationStack {
-            ScrollView {
-                VStack(spacing: VITASpacing.xl) {
-                    AppleWatchSection(viewModel: viewModel)
-                    ScreenTimeSection(viewModel: viewModel)
-                    DoorDashSection(viewModel: viewModel)
-                    InstacartSection(viewModel: viewModel)
-                    RotimaticSection(viewModel: viewModel)
-                    InstantPotSection(viewModel: viewModel)
-                    WeighingMachineSection(viewModel: viewModel)
-                    EnvironmentSection(viewModel: viewModel)
+            Group {
+                if !appState.isLoaded || isRefreshing {
+                    LoadingStateView(
+                        title: "Loading Integrations",
+                        message: "Syncing Apple Watch, Screen Time, and connected services."
+                    )
+                } else {
+                    ScrollView {
+                        VStack(spacing: VITASpacing.xl) {
+                            AppleWatchSection(viewModel: viewModel)
+                            ScreenTimeSection(viewModel: viewModel)
+                            DoorDashSection(viewModel: viewModel)
+                            InstacartSection(viewModel: viewModel)
+                            RotimaticSection(viewModel: viewModel)
+                            InstantPotSection(viewModel: viewModel)
+                            WeighingMachineSection(viewModel: viewModel)
+                            EnvironmentSection(viewModel: viewModel)
+                        }
+                        .padding(.horizontal, VITASpacing.lg)
+                        .padding(.bottom, VITASpacing.xxl)
+                    }
                 }
-                .padding(.horizontal, VITASpacing.lg)
-                .padding(.bottom, VITASpacing.xxl)
             }
             .background(VITAColors.background)
             .navigationTitle("Integrations")
-            .onAppear {
-                viewModel.load(from: appState)
-                Task {
-                    await appState.refreshHealthData()
-                    await appState.refreshDeliveryOrders()
-                    viewModel.load(from: appState)
-                }
+            .task(id: appState.isLoaded) {
+                await refreshIntegrations()
+            }
+            .refreshable {
+                await refreshIntegrations()
             }
             .onReceive(refreshTimer) { _ in
                 Task {
-                    await appState.refreshHealthData()
-                    await appState.refreshDeliveryOrders()
-                    viewModel.load(from: appState)
+                    await refreshIntegrations()
                 }
             }
         }
+    }
+
+    @MainActor
+    private func refreshIntegrations() async {
+        guard appState.isLoaded else { return }
+        isRefreshing = true
+        defer { isRefreshing = false }
+
+        await appState.refreshHealthData()
+        await appState.refreshDeliveryOrders()
+        viewModel.load(from: appState)
     }
 }
 
@@ -60,8 +77,17 @@ struct ScreenTimeSection: View {
                     .foregroundStyle(VITAColors.textSecondary)
             }
 
-            ForEach(viewModel.zombieScrollSessions) { session in
-                ZombieScrollCard(session: session)
+            if viewModel.zombieScrollSessions.isEmpty {
+                EmptyDataStateView(
+                    title: "No Screen Time Alerts Yet",
+                    message: viewModel.screenTimeStatusMessage.isEmpty
+                        ? "No zombie-scrolling events have been recorded yet."
+                        : viewModel.screenTimeStatusMessage
+                )
+            } else {
+                ForEach(viewModel.zombieScrollSessions) { session in
+                    ZombieScrollCard(session: session)
+                }
             }
         }
     }
