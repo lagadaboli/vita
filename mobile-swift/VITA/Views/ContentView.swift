@@ -41,6 +41,12 @@ struct ContentView: View {
                     Label("Skin", systemImage: "face.smiling")
                 }
 
+            HealthReportView(appState: appState)
+                .tag(AppState.AppTab.report)
+                .tabItem {
+                    Label("Report", systemImage: "doc.richtext")
+                }
+
             SettingsView(appState: appState)
                 .tag(AppState.AppTab.settings)
                 .tabItem {

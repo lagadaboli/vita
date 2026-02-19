@@ -11,6 +11,7 @@ final class AppState {
         case integrations
         case timeline
         case skinAudit
+        case report
         case settings
     }
 

@@ -34,6 +34,26 @@ struct SettingsView: View {
                     }
                 }
 
+                Section("Foxit PDF Reports") {
+                    NavigationLink {
+                        FoxitCredentialsView()
+                    } label: {
+                        Text("Foxit API Credentials")
+                    }
+
+                    HStack {
+                        Text("API Status")
+                        Spacer()
+                        if FoxitConfig.current.isConfigured {
+                            Text("Configured")
+                                .foregroundStyle(VITAColors.success)
+                        } else {
+                            Text("Not configured")
+                                .foregroundStyle(VITAColors.amber)
+                        }
+                    }
+                }
+
                 Section("Privacy") {
                     HStack {
                         Image(systemName: "lock.shield")
