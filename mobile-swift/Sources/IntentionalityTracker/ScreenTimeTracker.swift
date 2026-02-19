@@ -7,7 +7,7 @@ import Foundation
 import VITACore
 
 /// Tracks screen time using Apple's DeviceActivity/FamilyControls framework.
-/// Monitors Shopping & Food app category for zombie scrolling detection.
+/// Monitors Screen Time threshold breaches for zombie scrolling detection across apps.
 public final class ScreenTimeTracker: @unchecked Sendable {
     private let database: VITADatabase
     private let healthGraph: HealthGraph
@@ -40,7 +40,7 @@ public final class ScreenTimeTracker: @unchecked Sendable {
         try await AuthorizationCenter.shared.requestAuthorization(for: .individual)
     }
 
-    /// Start monitoring the Shopping & Food category with threshold events.
+    /// Start monitoring Screen Time with threshold events.
     public func startMonitoring() throws {
         let center = DeviceActivityCenter()
 
@@ -61,7 +61,7 @@ public final class ScreenTimeTracker: @unchecked Sendable {
         )
 
         try center.startMonitoring(
-            .init("vita.zombie.shopping"),
+            .init("vita.zombie.all_apps"),
             during: schedule,
             events: [
                 .init("vita.zombie.warn"): warnEvent,
@@ -80,7 +80,7 @@ public final class ScreenTimeTracker: @unchecked Sendable {
         let duration = defaults.double(forKey: UserDefaultsKeys.lastZombieDuration)
         guard duration > 0 else { return nil }
 
-        let categoryName = defaults.string(forKey: UserDefaultsKeys.lastZombieCategory) ?? "Shopping & Food"
+        let categoryName = defaults.string(forKey: UserDefaultsKeys.lastZombieCategory) ?? "Screen Time"
         let timestamp: Date
         if let storedTimestamp = defaults.object(forKey: UserDefaultsKeys.lastZombieTimestamp) as? Date {
             timestamp = storedTimestamp
@@ -95,6 +95,7 @@ public final class ScreenTimeTracker: @unchecked Sendable {
             appName: categoryName,
             metadata: [
                 "source": "screen_time",
+                "context": categoryName,
                 "category": categoryName,
                 "duration_minutes": String(format: "%.1f", duration / 60.0),
             ]

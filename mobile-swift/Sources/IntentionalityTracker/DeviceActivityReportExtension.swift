@@ -40,7 +40,7 @@ import Foundation
 //         }
 //
 //         defaults.set(thresholdMinutes * 60, forKey: "vita_zombie_duration_seconds")
-//         defaults.set("Shopping & Food", forKey: "vita_zombie_category_name")
+//         defaults.set("Screen Time", forKey: "vita_zombie_category_name")
 //         defaults.set(Date(), forKey: "vita_zombie_timestamp")
 //     }
 //
