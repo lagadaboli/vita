@@ -1,11 +1,11 @@
 import Foundation
 
 #if canImport(WatchConnectivity)
-import WatchConnectivity
+@preconcurrency import WatchConnectivity
 
 /// Bridges iPhone ↔ Watch communication for nudge delivery.
 /// Uses `transferUserInfo()` to queue delivery even if Watch is unreachable.
-public final class WatchConnectivityBridge: NSObject, WCSessionDelegate, Sendable {
+public final class WatchConnectivityBridge: NSObject, WCSessionDelegate, @unchecked Sendable {
     public static let shared = WatchConnectivityBridge()
 
     private let session: WCSession

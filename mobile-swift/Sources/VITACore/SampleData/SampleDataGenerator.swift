@@ -268,7 +268,7 @@ public final class SampleDataGenerator: Sendable {
 
         for (pattern, strength, count) in patterns {
             try database.write { db in
-                var p = CausalPattern(
+                let p = CausalPattern(
                     pattern: pattern,
                     strength: strength,
                     observationCount: count,
