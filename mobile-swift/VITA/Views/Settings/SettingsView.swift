@@ -34,6 +34,30 @@ struct SettingsView: View {
                     }
                 }
 
+                Section("Ask VITA AI") {
+                    NavigationLink {
+                        GeminiCredentialsView()
+                    } label: {
+                        Text("Gemini API Key")
+                    }
+
+                    HStack {
+                        Text("AI Chat Status")
+                        Spacer()
+                        if GeminiConfig.current.isConfigured {
+                            HStack(spacing: 4) {
+                                Image(systemName: "sparkles")
+                                    .font(.caption)
+                                Text("Gemini \(GeminiConfig.current.model.replacingOccurrences(of: "gemini-", with: ""))")
+                            }
+                            .foregroundStyle(VITAColors.success)
+                        } else {
+                            Text("Using engine templates")
+                                .foregroundStyle(VITAColors.amber)
+                        }
+                    }
+                }
+
                 Section("Foxit Report APIs") {
                     NavigationLink {
                         FoxitCredentialsView()

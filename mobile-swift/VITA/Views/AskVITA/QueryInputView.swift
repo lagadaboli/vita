@@ -8,7 +8,7 @@ struct QueryInputView: View {
     @FocusState private var isFocused: Bool
 
     private var canSend: Bool {
-        appState.isLoaded && !viewModel.queryText.isEmpty && !viewModel.isQuerying
+        appState.isLoaded && !viewModel.queryText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && !viewModel.isQuerying
     }
 
     var body: some View {
@@ -31,7 +31,7 @@ struct QueryInputView: View {
                     .focused($isFocused)
                     .onSubmit {
                         guard canSend else { return }
-                        Task { await viewModel.query(appState: appState) }
+                        Task { await viewModel.sendMessage(appState: appState) }
                     }
                     .disabled(!appState.isLoaded || viewModel.isQuerying)
                 }
@@ -44,7 +44,7 @@ struct QueryInputView: View {
                 Button {
                     guard canSend else { return }
                     isFocused = false
-                    Task { await viewModel.query(appState: appState) }
+                    Task { await viewModel.sendMessage(appState: appState) }
                 } label: {
                     ZStack {
                         Circle()
