@@ -84,12 +84,13 @@ final class IntegrationsViewModel {
     struct ZombieScrollSession: Identifiable {
         let id = UUID()
         let timestamp: Date
+        let appName: String
+        let context: String
+        let source: String
         let durationMinutes: Double
-        let itemsViewed: Int
-        let itemsPurchased: Int
-        let impulseRatio: Double
+        let dopamineDebtScore: Double
         var zombieScore: Int {
-            Int(impulseRatio * 100)
+            Int(min(max(dopamineDebtScore, 0.0), 100.0))
         }
     }
 
@@ -106,8 +107,35 @@ final class IntegrationsViewModel {
 
     func load(from appState: AppState) {
         let calendar = Calendar.current
-        let weekAgo = calendar.date(byAdding: .day, value: -7, to: Date()) ?? Date()
         let now = Date()
+        let dayStart = calendar.startOfDay(for: now)
+        let weekAgo = calendar.date(byAdding: .day, value: -7, to: now) ?? now
+
+        // Apple Watch / HealthKit-backed metrics
+        var latestWatchSync: Date?
+
+        if let hrvSamples = try? appState.healthGraph.querySamples(type: .hrvSDNN, from: dayStart, to: now),
+           let latest = hrvSamples.last {
+            watchHRV = latest.value
+            latestWatchSync = maxDate(latestWatchSync, latest.timestamp)
+        }
+
+        if let hrSamples = try? appState.healthGraph.querySamples(type: .restingHeartRate, from: dayStart, to: now),
+           let latest = hrSamples.last {
+            watchHR = latest.value
+            latestWatchSync = maxDate(latestWatchSync, latest.timestamp)
+        }
+
+        if let stepSamples = try? appState.healthGraph.querySamples(type: .stepCount, from: dayStart, to: now),
+           !stepSamples.isEmpty {
+            // Step count is stored as per-sample counts; show today's aggregate.
+            watchSteps = Int(stepSamples.reduce(0.0) { $0 + $1.value })
+            latestWatchSync = maxDate(latestWatchSync, stepSamples.last?.timestamp)
+        }
+
+        if let latestWatchSync {
+            watchSyncDate = latestWatchSync
+        }
 
         if let meals = try? appState.healthGraph.queryMeals(from: weekAgo, to: now) {
             doordashOrders = meals.filter { $0.source == .doordash }.prefix(5).map { meal in
@@ -184,20 +212,46 @@ final class IntegrationsViewModel {
             weightReadings = readings
         }
 
-        // Zombie scroll sessions (behavioral events with zombieScroll metadata)
+        // Zombie scrolling sessions from Screen Time and behavior classifier.
         if let behaviors = try? appState.healthGraph.queryBehaviors(from: weekAgo, to: now) {
             zombieScrollSessions = behaviors
-                .filter { $0.appName == "Instacart" && $0.metadata?["zombieScroll"] == "true" }
-                .prefix(5)
+                .filter { event in
+                    if event.category == .zombieScrolling {
+                        return true
+                    }
+                    return event.metadata?["zombieScroll"] == "true"
+                }
+                .suffix(5)
                 .map { event in
-                    ZombieScrollSession(
+                    let durationMinutes = max(
+                        event.duration / 60.0,
+                        Double(event.metadata?["duration_minutes"] ?? "") ?? 0.0
+                    )
+                    let appName = event.appName?.trimmingCharacters(in: .whitespacesAndNewlines)
+                    let resolvedApp = (appName?.isEmpty == false) ? appName! : "Unknown App"
+                    let context = event.metadata?["context"]
+                        ?? event.metadata?["category"]
+                        ?? "Cross-app Screen Time"
+                    let source = event.metadata?["source"] == "screen_time"
+                        ? "Screen Time"
+                        : "Behavioral Pattern"
+                    let score = event.dopamineDebtScore ?? BehavioralEvent.computeDopamineDebt(
+                        passiveMinutesLast3Hours: durationMinutes,
+                        appSwitchFrequencyZScore: 0.4,
+                        focusModeRatio: 0.0,
+                        lateNightPenalty: isLateNight(event.timestamp) ? 1.0 : 0.0
+                    )
+
+                    return ZombieScrollSession(
                         timestamp: event.timestamp,
-                        durationMinutes: event.duration / 60,
-                        itemsViewed: Int(event.metadata?["itemsViewed"] ?? "0") ?? 0,
-                        itemsPurchased: Int(event.metadata?["itemsPurchased"] ?? "0") ?? 0,
-                        impulseRatio: Double(event.metadata?["impulseRatio"] ?? "0") ?? 0
+                        appName: resolvedApp,
+                        context: context,
+                        source: source,
+                        durationMinutes: durationMinutes,
+                        dopamineDebtScore: score
                     )
                 }
+                .sorted(by: { $0.timestamp > $1.timestamp })
         }
 
         // Environment readings
@@ -232,5 +286,23 @@ final class IntegrationsViewModel {
                 )
             }
         }
+    }
+
+    private func maxDate(_ lhs: Date?, _ rhs: Date?) -> Date? {
+        switch (lhs, rhs) {
+        case let (l?, r?):
+            return max(l, r)
+        case (nil, let r?):
+            return r
+        case (let l?, nil):
+            return l
+        default:
+            return nil
+        }
+    }
+
+    private func isLateNight(_ date: Date) -> Bool {
+        let hour = Calendar.current.component(.hour, from: date)
+        return hour >= 22 || hour < 5
     }
 }

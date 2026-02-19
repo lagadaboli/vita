@@ -155,6 +155,7 @@ final class AppState {
         do {
             try await tracker.requestAuthorization()
             try tracker.startMonitoring()
+            ingestPendingScreenTimeData()
         } catch {
             // Screen Time is non-critical; continue without it
             #if DEBUG
@@ -366,6 +367,7 @@ final class AppState {
     }
 
     func refreshDeliveryOrders() async {
+        ingestPendingScreenTimeData()
         guard let bridge = consumptionBridge else { return }
 
         do {
@@ -381,6 +383,17 @@ final class AppState {
         } catch {
             #if DEBUG
             print("[AppState] Instacart sync failed: \(error.localizedDescription)")
+            #endif
+        }
+    }
+
+    private func ingestPendingScreenTimeData() {
+        guard let tracker = screenTimeTracker else { return }
+        do {
+            try tracker.ingestZombieData()
+        } catch {
+            #if DEBUG
+            print("[AppState] Screen Time ingest failed: \(error.localizedDescription)")
             #endif
         }
     }
