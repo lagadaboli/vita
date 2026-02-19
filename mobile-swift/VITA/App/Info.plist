@@ -2,15 +2,13 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-	<key>NSLocationWhenInUseUsageDescription</key>
-	<string>VITA uses your location to fetch local weather, AQI, and pollen conditions for accurate health context.</string>
-	<key>NSHealthShareUsageDescription</key>
-	<string>VITA needs access to your health data to analyze correlations between your meals, sleep, heart rate variability, and glucose levels. All data is processed locally on your device.</string>
-	<key>NSHealthUpdateUsageDescription</key>
-	<string>VITA may write health insights back to HealthKit for your reference.</string>
 	<key>UIBackgroundModes</key>
 	<array>
 		<string>processing</string>
 	</array>
+	<key>NSHealthShareUsageDescription</key>
+	<string>VITA reads your HRV, heart rate, glucose, sleep, steps, and energy data to identify causal patterns between your lifestyle and how you feel.</string>
+	<key>NSHealthUpdateUsageDescription</key>
+	<string>VITA does not write to Health.</string>
 </dict>
 </plist>
