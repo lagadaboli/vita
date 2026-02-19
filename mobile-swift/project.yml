@@ -116,6 +116,7 @@ targets:
           - processing
         VITABackendURL: "http://adityas-macbook-pro.local:8000"
         VITAMockRotimaticEnabled: true
+        VITAMockInstantPotEnabled: true
     entitlements:
       path: VITA/VITA.entitlements
       properties:

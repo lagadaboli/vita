@@ -62,6 +62,16 @@ final class AppState {
         return true
     }()
 
+    /// Toggle Instant Pot mock sessions from Info.plist (default: enabled for dev).
+    private static let instantPotMockEnabled: Bool = {
+        if let configured = Bundle.main.object(
+            forInfoDictionaryKey: "VITAMockInstantPotEnabled"
+        ) as? Bool {
+            return configured
+        }
+        return true
+    }()
+
     /// On-device LLM service for narrative generation (Metal-accelerated).
     #if canImport(MLXLLM) && canImport(Metal)
     let llmService: MLXLLMService
@@ -172,6 +182,9 @@ final class AppState {
         if Self.rotimaticMockEnabled {
             seedMockRotimaticSessionsIfNeeded()
         }
+        if Self.instantPotMockEnabled {
+            seedMockInstantPotProgramsIfNeeded()
+        }
 
         // Background-load the on-device LLM (non-blocking)
         #if canImport(MLXLLM) && canImport(Metal)
@@ -263,6 +276,92 @@ final class AppState {
 
         for var session in mockSessions {
             try? healthGraph.ingest(&session)
+        }
+    }
+
+    private func seedMockInstantPotProgramsIfNeeded() {
+        let now = Date()
+        let lookbackStart = Calendar.current.date(byAdding: .day, value: -7, to: now)
+            ?? now.addingTimeInterval(-7 * 24 * 60 * 60)
+
+        let hasInstantPotData = (try? healthGraph.queryMeals(from: lookbackStart, to: now)
+            .contains(where: { $0.source == .instantPot })) ?? false
+        guard !hasInstantPotData else { return }
+
+        let mockPrograms: [MealEvent] = [
+            MealEvent(
+                timestamp: now.addingTimeInterval(-4.0 * 60 * 60),
+                source: .instantPot,
+                eventType: .mealPreparation,
+                ingredients: [
+                    MealEvent.Ingredient(
+                        name: "Chickpeas",
+                        quantityGrams: 220,
+                        glycemicIndex: 28,
+                        type: "legume"
+                    ),
+                    MealEvent.Ingredient(
+                        name: "Tomato",
+                        quantityGrams: 120,
+                        glycemicIndex: 15,
+                        type: "vegetable"
+                    )
+                ],
+                cookingMethod: "pressure_cook_high",
+                estimatedGlycemicLoad: 16,
+                bioavailabilityModifier: 1.24,
+                confidence: 0.91
+            ),
+            MealEvent(
+                timestamp: now.addingTimeInterval(-30.0 * 60 * 60),
+                source: .instantPot,
+                eventType: .mealPreparation,
+                ingredients: [
+                    MealEvent.Ingredient(
+                        name: "Chicken Thigh",
+                        quantityGrams: 260,
+                        glycemicIndex: 0,
+                        type: "protein"
+                    ),
+                    MealEvent.Ingredient(
+                        name: "Brown Rice",
+                        quantityGrams: 150,
+                        glycemicIndex: 50,
+                        type: "grain"
+                    )
+                ],
+                cookingMethod: "slow_cook_low",
+                estimatedGlycemicLoad: 21,
+                bioavailabilityModifier: 1.06,
+                confidence: 0.89
+            ),
+            MealEvent(
+                timestamp: now.addingTimeInterval(-4.0 * 24 * 60 * 60),
+                source: .instantPot,
+                eventType: .mealPreparation,
+                ingredients: [
+                    MealEvent.Ingredient(
+                        name: "Masoor Dal",
+                        quantityGrams: 180,
+                        glycemicIndex: 32,
+                        type: "legume"
+                    ),
+                    MealEvent.Ingredient(
+                        name: "Spinach",
+                        quantityGrams: 90,
+                        glycemicIndex: 15,
+                        type: "vegetable"
+                    )
+                ],
+                cookingMethod: "pressure_cook_medium",
+                estimatedGlycemicLoad: 14,
+                bioavailabilityModifier: 1.19,
+                confidence: 0.93
+            )
+        ]
+
+        for var program in mockPrograms {
+            try? healthGraph.ingest(&program)
         }
     }
 
