@@ -3,6 +3,7 @@ import VITADesignSystem
 
 struct RotimaticSection: View {
     let viewModel: IntegrationsViewModel
+    let isLoading: Bool
 
     var body: some View {
         VStack(alignment: .leading, spacing: VITASpacing.md) {
@@ -18,38 +19,49 @@ struct RotimaticSection: View {
                     .foregroundStyle(VITAColors.textSecondary)
             }
 
-            ForEach(viewModel.rotimaticSessions) { session in
-                VStack(alignment: .leading, spacing: VITASpacing.sm) {
-                    HStack {
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(session.flourType)
-                                .font(VITATypography.headline)
-                            Text("\(session.count) rotis")
-                                .font(VITATypography.caption)
-                                .foregroundStyle(VITAColors.textSecondary)
-                        }
-
-                        Spacer()
-
-                        VStack(alignment: .trailing, spacing: 2) {
-                            Text(session.timestamp, style: .date)
-                                .font(VITATypography.caption)
-                                .foregroundStyle(VITAColors.textTertiary)
-                            FlourTypeBadge(isWholeWheat: session.flourType == "Whole Wheat")
-                        }
-                    }
-
-                    HStack {
-                        GLBar(glycemicLoad: session.glycemicLoad)
-                        Spacer()
-                        Text(session.glucoseImpact)
-                            .font(VITATypography.caption)
-                            .foregroundStyle(session.flourType == "Whole Wheat" ? VITAColors.success : VITAColors.coral)
-                    }
+            if isLoading {
+                ForEach(0..<2, id: \.self) { _ in
+                    SkeletonCard(lines: [130, 110, 170], lineHeight: 12)
                 }
-                .padding(VITASpacing.cardPadding)
-                .background(VITAColors.cardBackground)
-                .clipShape(RoundedRectangle(cornerRadius: VITASpacing.cardCornerRadius))
+            } else if viewModel.rotimaticSessions.isEmpty {
+                EmptyDataStateView(
+                    title: "No Rotimatic Sessions Yet",
+                    message: "Sessions will appear once your Rotimatic data syncs."
+                )
+            } else {
+                ForEach(viewModel.rotimaticSessions) { session in
+                    VStack(alignment: .leading, spacing: VITASpacing.sm) {
+                        HStack {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(session.flourType)
+                                    .font(VITATypography.headline)
+                                Text("\(session.count) rotis")
+                                    .font(VITATypography.caption)
+                                    .foregroundStyle(VITAColors.textSecondary)
+                            }
+
+                            Spacer()
+
+                            VStack(alignment: .trailing, spacing: 2) {
+                                Text(session.timestamp, style: .date)
+                                    .font(VITATypography.caption)
+                                    .foregroundStyle(VITAColors.textTertiary)
+                                FlourTypeBadge(isWholeWheat: session.flourType == "Whole Wheat")
+                            }
+                        }
+
+                        HStack {
+                            GLBar(glycemicLoad: session.glycemicLoad)
+                            Spacer()
+                            Text(session.glucoseImpact)
+                                .font(VITATypography.caption)
+                                .foregroundStyle(session.flourType == "Whole Wheat" ? VITAColors.success : VITAColors.coral)
+                        }
+                    }
+                    .padding(VITASpacing.cardPadding)
+                    .background(VITAColors.cardBackground)
+                    .clipShape(RoundedRectangle(cornerRadius: VITASpacing.cardCornerRadius))
+                }
             }
         }
     }

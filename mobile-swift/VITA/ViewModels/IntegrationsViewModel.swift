@@ -6,10 +6,14 @@ import VITADesignSystem
 @Observable
 final class IntegrationsViewModel {
     // Apple Watch
-    var watchSyncDate = Date().addingTimeInterval(-300)
-    var watchHRV: Double = 52
-    var watchHR: Double = 64
-    var watchSteps: Int = 4800
+    var watchSyncDate = Date.distantPast
+    var watchHRV: Double = 0
+    var watchHR: Double = 0
+    var watchSteps: Int = 0
+    var watchConnectionStatus: ConnectionStatus = .syncing
+    var watchConnectionDetail: String = "Checking status..."
+    var screenTimeStatusMessage: String = ""
+    var isScreenTimeAuthorized = false
 
     // DoorDash orders
     var doordashOrders: [DoorDashOrder] = []
@@ -31,6 +35,21 @@ final class IntegrationsViewModel {
 
     // Environment readings
     var environmentReadings: [EnvironmentReading] = []
+    var hasLoaded = false
+
+    var hasAnyData: Bool {
+        watchSyncDate != .distantPast
+            || watchHRV > 0
+            || watchHR > 0
+            || watchSteps > 0
+            || !doordashOrders.isEmpty
+            || !rotimaticSessions.isEmpty
+            || !instantPotPrograms.isEmpty
+            || !instacartOrders.isEmpty
+            || !weightReadings.isEmpty
+            || !zombieScrollSessions.isEmpty
+            || !environmentReadings.isEmpty
+    }
 
     struct DoorDashOrder: Identifiable {
         let id = UUID()
@@ -84,12 +103,13 @@ final class IntegrationsViewModel {
     struct ZombieScrollSession: Identifiable {
         let id = UUID()
         let timestamp: Date
+        let appName: String
+        let context: String
+        let source: String
         let durationMinutes: Double
-        let itemsViewed: Int
-        let itemsPurchased: Int
-        let impulseRatio: Double
+        let dopamineDebtScore: Double
         var zombieScore: Int {
-            Int(impulseRatio * 100)
+            Int(min(max(dopamineDebtScore, 0.0), 100.0))
         }
     }
 
@@ -106,8 +126,78 @@ final class IntegrationsViewModel {
 
     func load(from appState: AppState) {
         let calendar = Calendar.current
-        let weekAgo = calendar.date(byAdding: .day, value: -7, to: Date()) ?? Date()
         let now = Date()
+        let dayStart = calendar.startOfDay(for: now)
+        let weekAgo = calendar.date(byAdding: .day, value: -7, to: now) ?? now
+
+        switch appState.screenTimeStatus {
+        case .authorized:
+            isScreenTimeAuthorized = true
+            screenTimeStatusMessage = "Screen Time monitoring is active."
+        case .unavailable(let reason):
+            isScreenTimeAuthorized = false
+            screenTimeStatusMessage = "Screen Time access unavailable: \(reason). Check Screen Time + Family Controls permissions."
+        case .notConfigured:
+            isScreenTimeAuthorized = false
+            screenTimeStatusMessage = "Screen Time monitoring is not configured."
+        }
+
+        // Apple Watch connectivity status.
+        #if canImport(WatchConnectivity)
+        let watchStatus = WatchConnectivityBridge.shared.connectionStatus()
+        if watchStatus.isSupported {
+            if watchStatus.isPaired {
+                if watchStatus.isWatchAppInstalled {
+                    watchConnectionStatus = watchStatus.isReachable ? .connected : .syncing
+                    watchConnectionDetail = watchStatus.isReachable
+                        ? "Paired and reachable"
+                        : "Paired, app installed"
+                } else {
+                    watchConnectionStatus = .notConfigured
+                    watchConnectionDetail = "Watch app not installed"
+                }
+            } else {
+                watchConnectionStatus = .disconnected
+                watchConnectionDetail = "No paired Apple Watch"
+            }
+        } else {
+            watchConnectionStatus = .notConfigured
+            watchConnectionDetail = "Watch connectivity unavailable"
+        }
+        #else
+        watchConnectionStatus = .notConfigured
+        watchConnectionDetail = "Watch connectivity unavailable"
+        #endif
+
+        // Apple Watch / HealthKit-backed metrics.
+        var latestWatchSync: Date?
+
+        if let hrvSamples = try? appState.healthGraph.querySamples(type: .hrvSDNN, from: weekAgo, to: now) {
+            let preferredSamples = preferredWatchSamples(from: hrvSamples)
+            if let latest = preferredSamples.last {
+                watchHRV = latest.value
+                latestWatchSync = maxDate(latestWatchSync, latest.timestamp)
+            }
+        }
+
+        if let hrSamples = fetchHeartRateSamples(from: appState, from: weekAgo, to: now) {
+            let preferredSamples = preferredWatchSamples(from: hrSamples)
+            if let latest = preferredSamples.last {
+                watchHR = latest.value
+                latestWatchSync = maxDate(latestWatchSync, latest.timestamp)
+            }
+        }
+
+        if let stepSamples = try? appState.healthGraph.querySamples(type: .stepCount, from: dayStart, to: now),
+           !stepSamples.isEmpty {
+            let preferredSamples = preferredWatchSamples(from: stepSamples)
+            watchSteps = Int(preferredSamples.reduce(0.0) { $0 + $1.value }.rounded())
+            latestWatchSync = maxDate(latestWatchSync, preferredSamples.last?.timestamp)
+        }
+
+        if let latestWatchSync {
+            watchSyncDate = latestWatchSync
+        }
 
         if let meals = try? appState.healthGraph.queryMeals(from: weekAgo, to: now) {
             doordashOrders = meals.filter { $0.source == .doordash }.prefix(5).map { meal in
@@ -184,20 +274,46 @@ final class IntegrationsViewModel {
             weightReadings = readings
         }
 
-        // Zombie scroll sessions (behavioral events with zombieScroll metadata)
+        // Zombie scrolling sessions from Screen Time and behavior classifier.
         if let behaviors = try? appState.healthGraph.queryBehaviors(from: weekAgo, to: now) {
             zombieScrollSessions = behaviors
-                .filter { $0.appName == "Instacart" && $0.metadata?["zombieScroll"] == "true" }
-                .prefix(5)
+                .filter { event in
+                    if event.category == .zombieScrolling {
+                        return true
+                    }
+                    return event.metadata?["zombieScroll"] == "true"
+                }
+                .suffix(5)
                 .map { event in
-                    ZombieScrollSession(
+                    let durationMinutes = max(
+                        event.duration / 60.0,
+                        Double(event.metadata?["duration_minutes"] ?? "") ?? 0.0
+                    )
+                    let appName = event.appName?.trimmingCharacters(in: .whitespacesAndNewlines)
+                    let resolvedApp = (appName?.isEmpty == false) ? appName! : "Unknown App"
+                    let context = event.metadata?["context"]
+                        ?? event.metadata?["category"]
+                        ?? "Cross-app Screen Time"
+                    let source = event.metadata?["source"] == "screen_time"
+                        ? "Screen Time"
+                        : "Behavioral Pattern"
+                    let score = event.dopamineDebtScore ?? BehavioralEvent.computeDopamineDebt(
+                        passiveMinutesLast3Hours: durationMinutes,
+                        appSwitchFrequencyZScore: 0.4,
+                        focusModeRatio: 0.0,
+                        lateNightPenalty: isLateNight(event.timestamp) ? 1.0 : 0.0
+                    )
+
+                    return ZombieScrollSession(
                         timestamp: event.timestamp,
-                        durationMinutes: event.duration / 60,
-                        itemsViewed: Int(event.metadata?["itemsViewed"] ?? "0") ?? 0,
-                        itemsPurchased: Int(event.metadata?["itemsPurchased"] ?? "0") ?? 0,
-                        impulseRatio: Double(event.metadata?["impulseRatio"] ?? "0") ?? 0
+                        appName: resolvedApp,
+                        context: context,
+                        source: source,
+                        durationMinutes: durationMinutes,
+                        dopamineDebtScore: score
                     )
                 }
+                .sorted(by: { $0.timestamp > $1.timestamp })
         }
 
         // Environment readings
@@ -232,5 +348,57 @@ final class IntegrationsViewModel {
                 )
             }
         }
+        hasLoaded = true
+    }
+
+    private func preferredWatchSamples(from samples: [PhysiologicalSample]) -> [PhysiologicalSample] {
+        let watchSamples = samples.filter(isWatchSample)
+        return watchSamples.isEmpty ? samples : watchSamples
+    }
+
+    private func isWatchSample(_ sample: PhysiologicalSample) -> Bool {
+        if sample.source == .appleWatch {
+            return true
+        }
+        if sample.metadata?["is_watch_sample"] == "true" {
+            return true
+        }
+        return false
+    }
+
+    private func fetchHeartRateSamples(
+        from appState: AppState,
+        from startDate: Date,
+        to endDate: Date
+    ) -> [PhysiologicalSample]? {
+        if let heartRate = try? appState.healthGraph.querySamples(type: .heartRate, from: startDate, to: endDate),
+           !heartRate.isEmpty {
+            return heartRate
+        }
+
+        if let resting = try? appState.healthGraph.querySamples(type: .restingHeartRate, from: startDate, to: endDate),
+           !resting.isEmpty {
+            return resting
+        }
+
+        return nil
+    }
+
+    private func maxDate(_ lhs: Date?, _ rhs: Date?) -> Date? {
+        switch (lhs, rhs) {
+        case let (l?, r?):
+            return max(l, r)
+        case (nil, let r?):
+            return r
+        case (let l?, nil):
+            return l
+        default:
+            return nil
+        }
+    }
+
+    private func isLateNight(_ date: Date) -> Bool {
+        let hour = Calendar.current.component(.hour, from: date)
+        return hour >= 22 || hour < 5
     }
 }

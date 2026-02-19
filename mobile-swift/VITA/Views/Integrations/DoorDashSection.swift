@@ -3,6 +3,7 @@ import VITADesignSystem
 
 struct DoorDashSection: View {
     let viewModel: IntegrationsViewModel
+    let isLoading: Bool
 
     var body: some View {
         VStack(alignment: .leading, spacing: VITASpacing.md) {
@@ -18,33 +19,44 @@ struct DoorDashSection: View {
                     .foregroundStyle(VITAColors.textSecondary)
             }
 
-            ForEach(viewModel.doordashOrders) { order in
-                VStack(alignment: .leading, spacing: VITASpacing.sm) {
-                    HStack {
-                        Text(order.name)
-                            .font(VITATypography.headline)
-                        Spacer()
-                        Text(order.timestamp, style: .date)
-                            .font(VITATypography.caption)
-                            .foregroundStyle(VITAColors.textTertiary)
-                    }
-
-                    Text(order.ingredients.joined(separator: ", "))
-                        .font(VITATypography.caption)
-                        .foregroundStyle(VITAColors.textSecondary)
-                        .lineLimit(2)
-
-                    HStack {
-                        GLBar(glycemicLoad: order.glycemicLoad)
-                        Spacer()
-                        Text(order.glucoseImpact)
-                            .font(VITATypography.caption)
-                            .foregroundStyle(glColor(order.glycemicLoad))
-                    }
+            if isLoading {
+                ForEach(0..<2, id: \.self) { _ in
+                    SkeletonCard(lines: [120, 230, 150], lineHeight: 12)
                 }
-                .padding(VITASpacing.cardPadding)
-                .background(VITAColors.cardBackground)
-                .clipShape(RoundedRectangle(cornerRadius: VITASpacing.cardCornerRadius))
+            } else if viewModel.doordashOrders.isEmpty {
+                EmptyDataStateView(
+                    title: "No DoorDash Orders Yet",
+                    message: "Orders will appear here once DoorDash data syncs."
+                )
+            } else {
+                ForEach(viewModel.doordashOrders) { order in
+                    VStack(alignment: .leading, spacing: VITASpacing.sm) {
+                        HStack {
+                            Text(order.name)
+                                .font(VITATypography.headline)
+                            Spacer()
+                            Text(order.timestamp, style: .date)
+                                .font(VITATypography.caption)
+                                .foregroundStyle(VITAColors.textTertiary)
+                        }
+
+                        Text(order.ingredients.joined(separator: ", "))
+                            .font(VITATypography.caption)
+                            .foregroundStyle(VITAColors.textSecondary)
+                            .lineLimit(2)
+
+                        HStack {
+                            GLBar(glycemicLoad: order.glycemicLoad)
+                            Spacer()
+                            Text(order.glucoseImpact)
+                                .font(VITATypography.caption)
+                                .foregroundStyle(glColor(order.glycemicLoad))
+                        }
+                    }
+                    .padding(VITASpacing.cardPadding)
+                    .background(VITAColors.cardBackground)
+                    .clipShape(RoundedRectangle(cornerRadius: VITASpacing.cardCornerRadius))
+                }
             }
         }
     }

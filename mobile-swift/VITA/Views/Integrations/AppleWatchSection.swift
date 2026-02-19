@@ -3,6 +3,7 @@ import VITADesignSystem
 
 struct AppleWatchSection: View {
     let viewModel: IntegrationsViewModel
+    let isLoading: Bool
 
     var body: some View {
         VStack(alignment: .leading, spacing: VITASpacing.md) {
@@ -13,31 +14,63 @@ struct AppleWatchSection: View {
                 Text("Apple Watch")
                     .font(VITATypography.title3)
                 Spacer()
-                ConnectionStatusBadge(name: "", icon: "checkmark.circle.fill", status: .connected)
+                ConnectionStatusBadge(name: "", icon: "applewatch", status: viewModel.watchConnectionStatus)
             }
 
-            VStack(spacing: VITASpacing.md) {
-                HStack {
-                    Text("Last sync")
-                        .font(VITATypography.caption)
-                        .foregroundStyle(VITAColors.textSecondary)
-                    Spacer()
-                    Text(viewModel.watchSyncDate, style: .relative)
-                        .font(VITATypography.caption)
-                        .foregroundStyle(VITAColors.textTertiary)
-                }
+            if isLoading {
+                SkeletonCard(lines: [120, 180, 220], lineHeight: 12)
+            } else {
+                VStack(spacing: VITASpacing.md) {
+                    HStack {
+                        Text("Connection")
+                            .font(VITATypography.caption)
+                            .foregroundStyle(VITAColors.textSecondary)
+                        Spacer()
+                        Text(viewModel.watchConnectionDetail)
+                            .font(VITATypography.caption)
+                            .foregroundStyle(VITAColors.textTertiary)
+                    }
 
-                Divider()
+                    HStack {
+                        Text("Last sync")
+                            .font(VITATypography.caption)
+                            .foregroundStyle(VITAColors.textSecondary)
+                        Spacer()
+                        if viewModel.watchSyncDate == Date.distantPast {
+                            Text("No sync yet")
+                                .font(VITATypography.caption)
+                                .foregroundStyle(VITAColors.textTertiary)
+                        } else {
+                            Text(viewModel.watchSyncDate, style: .relative)
+                                .font(VITATypography.caption)
+                                .foregroundStyle(VITAColors.textTertiary)
+                        }
+                    }
 
-                HStack(spacing: VITASpacing.xl) {
-                    WatchMetricItem(label: "HRV", value: "\(Int(viewModel.watchHRV))", unit: "ms")
-                    WatchMetricItem(label: "HR", value: "\(Int(viewModel.watchHR))", unit: "bpm")
-                    WatchMetricItem(label: "Steps", value: "\(viewModel.watchSteps)", unit: "")
+                    Divider()
+
+                    HStack(spacing: VITASpacing.xl) {
+                        WatchMetricItem(
+                            label: "HRV",
+                            value: "\(Int(viewModel.watchHRV))",
+                            unit: "ms"
+                        )
+                        WatchMetricItem(
+                            label: "HR",
+                            value: "\(Int(viewModel.watchHR))",
+                            unit: "bpm"
+                        )
+                        WatchMetricItem(
+                            label: "Steps",
+                            value: "\(viewModel.watchSteps)",
+                            unit: ""
+                        )
+                    }
                 }
+                .padding(VITASpacing.cardPadding)
+                .background(VITAColors.cardBackground)
+                .clipShape(RoundedRectangle(cornerRadius: VITASpacing.cardCornerRadius))
             }
-            .padding(VITASpacing.cardPadding)
-            .background(VITAColors.cardBackground)
-            .clipShape(RoundedRectangle(cornerRadius: VITASpacing.cardCornerRadius))
         }
     }
 }

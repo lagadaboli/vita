@@ -11,14 +11,22 @@ struct AskVITAView: View {
             ZStack(alignment: .bottom) {
                 ScrollView {
                     VStack(spacing: VITASpacing.xl) {
+                        if !appState.isLoaded {
+                            EmptyDataStateView(
+                                title: "Preparing Ask VITA",
+                                message: "Health data is still syncing. You can type now and send once sync completes."
+                            )
+                            .padding(.horizontal, VITASpacing.lg)
+                        }
+
                         if !viewModel.hasQueried {
                             emptyState
                         } else {
                             resultsView
                         }
                     }
-                    .padding(.bottom, 100) // Space for input bar
                 }
+                .padding(.bottom, 100) // Space for input bar
 
                 QueryInputView(viewModel: viewModel, appState: appState)
             }

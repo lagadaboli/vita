@@ -3,6 +3,7 @@ import VITADesignSystem
 
 struct InstacartSection: View {
     let viewModel: IntegrationsViewModel
+    let isLoading: Bool
 
     var body: some View {
         VStack(alignment: .leading, spacing: VITASpacing.md) {
@@ -18,118 +19,43 @@ struct InstacartSection: View {
                     .foregroundStyle(VITAColors.textSecondary)
             }
 
-            // Zombie Scrolling Alert
-            if !viewModel.zombieScrollSessions.isEmpty {
-                ForEach(viewModel.zombieScrollSessions) { session in
-                    ZombieScrollCard(session: session)
+            if isLoading {
+                ForEach(0..<2, id: \.self) { _ in
+                    SkeletonCard(lines: [120, 240, 160], lineHeight: 12)
                 }
-            }
+            } else if viewModel.instacartOrders.isEmpty {
+                EmptyDataStateView(
+                    title: "No Instacart Orders Yet",
+                    message: "Orders will appear here once Instacart data syncs."
+                )
+            } else {
+                ForEach(viewModel.instacartOrders) { order in
+                    VStack(alignment: .leading, spacing: VITASpacing.sm) {
+                        HStack {
+                            Text(order.label)
+                                .font(VITATypography.headline)
+                            Spacer()
+                            Text(order.timestamp, style: .date)
+                                .font(VITATypography.caption)
+                                .foregroundStyle(VITAColors.textTertiary)
+                        }
 
-            // Order Cards
-            ForEach(viewModel.instacartOrders) { order in
-                VStack(alignment: .leading, spacing: VITASpacing.sm) {
-                    HStack {
-                        Text(order.label)
-                            .font(VITATypography.headline)
-                        Spacer()
-                        Text(order.timestamp, style: .date)
+                        Text(order.items.map(\.name).joined(separator: ", "))
                             .font(VITATypography.caption)
-                            .foregroundStyle(VITAColors.textTertiary)
+                            .foregroundStyle(VITAColors.textSecondary)
+                            .lineLimit(2)
+
+                        HStack {
+                            GLBar(glycemicLoad: order.totalGL)
+                            Spacer()
+                            HealthScoreBadge(score: order.healthScore)
+                        }
                     }
-
-                    // Item list
-                    Text(order.items.map(\.name).joined(separator: ", "))
-                        .font(VITATypography.caption)
-                        .foregroundStyle(VITAColors.textSecondary)
-                        .lineLimit(2)
-
-                    HStack {
-                        GLBar(glycemicLoad: order.totalGL)
-                        Spacer()
-                        HealthScoreBadge(score: order.healthScore)
-                    }
-                }
-                .padding(VITASpacing.cardPadding)
-                .background(VITAColors.cardBackground)
-                .clipShape(RoundedRectangle(cornerRadius: VITASpacing.cardCornerRadius))
-            }
-        }
-    }
-}
-
-struct ZombieScrollCard: View {
-    let session: IntegrationsViewModel.ZombieScrollSession
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: VITASpacing.sm) {
-            HStack(spacing: VITASpacing.sm) {
-                Image(systemName: "exclamationmark.triangle.fill")
-                    .foregroundStyle(VITAColors.amber)
-                Text("Zombie Scrolling Detected")
-                    .font(VITATypography.headline)
-                    .foregroundStyle(VITAColors.amber)
-                Spacer()
-                Text(session.timestamp, style: .date)
-                    .font(VITATypography.caption)
-                    .foregroundStyle(VITAColors.textTertiary)
-            }
-
-            HStack(spacing: VITASpacing.xl) {
-                VStack(spacing: VITASpacing.xs) {
-                    Text("\(Int(session.durationMinutes))")
-                        .font(VITATypography.metricSmall)
-                        .foregroundStyle(VITAColors.coral)
-                    Text("min browsing")
-                        .font(VITATypography.caption2)
-                        .foregroundStyle(VITAColors.textTertiary)
-                }
-
-                VStack(spacing: VITASpacing.xs) {
-                    Text("\(session.itemsViewed)")
-                        .font(VITATypography.metricSmall)
-                        .foregroundStyle(VITAColors.textPrimary)
-                    Text("viewed")
-                        .font(VITATypography.caption2)
-                        .foregroundStyle(VITAColors.textTertiary)
-                }
-
-                VStack(spacing: VITASpacing.xs) {
-                    Text("\(session.itemsPurchased)")
-                        .font(VITATypography.metricSmall)
-                        .foregroundStyle(VITAColors.textPrimary)
-                    Text("purchased")
-                        .font(VITATypography.caption2)
-                        .foregroundStyle(VITAColors.textTertiary)
-                }
-
-                VStack(spacing: VITASpacing.xs) {
-                    Text("\(session.zombieScore)")
-                        .font(VITATypography.metricSmall)
-                        .foregroundStyle(zombieScoreColor(session.zombieScore))
-                    Text("zombie score")
-                        .font(VITATypography.caption2)
-                        .foregroundStyle(VITAColors.textTertiary)
+                    .padding(VITASpacing.cardPadding)
+                    .background(VITAColors.cardBackground)
+                    .clipShape(RoundedRectangle(cornerRadius: VITASpacing.cardCornerRadius))
                 }
             }
-
-            Text("Impulse ratio: \(String(format: "%.0f%%", session.impulseRatio * 100)) of purchases were unplanned")
-                .font(VITATypography.caption)
-                .foregroundStyle(VITAColors.textSecondary)
-        }
-        .padding(VITASpacing.cardPadding)
-        .background(VITAColors.amber.opacity(0.08))
-        .clipShape(RoundedRectangle(cornerRadius: VITASpacing.cardCornerRadius))
-        .overlay(
-            RoundedRectangle(cornerRadius: VITASpacing.cardCornerRadius)
-                .stroke(VITAColors.amber.opacity(0.3), lineWidth: 1)
-        )
-    }
-
-    private func zombieScoreColor(_ score: Int) -> Color {
-        switch score {
-        case ..<50: return VITAColors.success
-        case 50..<75: return VITAColors.amber
-        default: return VITAColors.coral
         }
     }
 }
