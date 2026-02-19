@@ -30,6 +30,22 @@ final class AskVITAViewModel {
     var reportPDFData: Data?
     var isShowingReportShareSheet = false
 
+    // Loading phase for animated thinking state
+    var loadingPhase: Int = 0
+    private var loadingTask: Task<Void, Never>?
+
+    static let loadingPhases = [
+        "Scanning glucose patterns...",
+        "Cross-referencing meal data...",
+        "Analyzing HRV & sleep...",
+        "Tracing causal chains...",
+        "Generating insights..."
+    ]
+
+    var currentLoadingPhase: String {
+        Self.loadingPhases[loadingPhase % Self.loadingPhases.count]
+    }
+
     var canGenerateReport: Bool {
         hasQueried && !explanations.isEmpty && !isQuerying
     }
@@ -42,30 +58,62 @@ final class AskVITAViewModel {
         return String(format: "%.1f MB", Double(bytes) / (1_024 * 1_024))
     }
 
+    // Smart suggestions spanning all three debt types
     let suggestions = [
         "Why am I tired?",
         "Why can't I focus?",
         "Why is my stomach upset?",
-        "Why am I sleeping poorly?"
+        "Why am I sleeping poorly?",
+        "Why is my HRV low?",
+        "Why did my glucose spike?",
+        "Why do I feel anxious?",
+        "Why am I crashing after meals?"
     ]
+
+    // Data sources actively used by the last explanation (for UI badges)
+    var activatedSources: Set<String> = []
 
     func query(appState: AppState) async {
         let text = queryText.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty else { return }
+
+        // Clear the input immediately — fix: text was not clearing after submit
+        queryText = ""
 
         resetReport()
         explanations = []
         counterfactuals = []
         glucoseDataPoints = []
         mealAnnotations = []
+        activatedSources = []
         lastSubmittedQuery = text
+        hasQueried = true   // switch to chat view immediately
         isQuerying = true
-        defer { isQuerying = false }
+        loadingPhase = 0
+
+        // Rotate loading phase messages while the agent reasons
+        loadingTask?.cancel()
+        loadingTask = Task { [weak self] in
+            guard let self else { return }
+            while !Task.isCancelled {
+                try? await Task.sleep(nanoseconds: 1_400_000_000) // 1.4s
+                if Task.isCancelled { break }
+                self.loadingPhase += 1
+            }
+        }
+
+        defer {
+            isQuerying = false
+            loadingTask?.cancel()
+            loadingTask = nil
+        }
 
         do {
             let rawExplanations = try await appState.causalityEngine.querySymptom(text)
             explanations = Array(rawExplanations.prefix(maxExplanations))
-            hasQueried = true
+
+            // Infer which data sources were active from the causal chains
+            activatedSources = inferActiveSources(from: explanations)
 
             // Generate context-aware counterfactuals from the explanations
             let generatedCounterfactuals = try await appState.causalityEngine.generateCounterfactual(
@@ -184,6 +232,37 @@ final class AskVITAViewModel {
             print("[AskVITAViewModel] Chart data load failed: \(error)")
             #endif
         }
+    }
+
+    // MARK: - Source Inference
+
+    /// Infer which health data streams contributed by scanning the causal chains.
+    private func inferActiveSources(from explanations: [CausalExplanation]) -> Set<String> {
+        var sources: Set<String> = []
+        let allChainText = explanations.flatMap(\.causalChain).joined(separator: " ").lowercased()
+
+        if allChainText.contains("glucose") || allChainText.contains("spike") || allChainText.contains("crash") {
+            sources.insert("Glucose")
+        }
+        if allChainText.contains("meal") || allChainText.contains("glycemic") || allChainText.contains("rotimatic") || allChainText.contains("instant pot") {
+            sources.insert("Meals")
+        }
+        if allChainText.contains("hrv") || allChainText.contains("heart") {
+            sources.insert("HRV")
+        }
+        if allChainText.contains("sleep") {
+            sources.insert("Sleep")
+        }
+        if allChainText.contains("screen") || allChainText.contains("dopamine") || allChainText.contains("passive") {
+            sources.insert("Behavior")
+        }
+        if allChainText.contains("aqi") || allChainText.contains("pollen") || allChainText.contains("temp") {
+            sources.insert("Environment")
+        }
+
+        // Always show at least the primary source
+        if sources.isEmpty { sources.insert("Health Graph") }
+        return sources
     }
 
     // MARK: - SMS Escalation (Tier 4)
