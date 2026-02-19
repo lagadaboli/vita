@@ -28,6 +28,7 @@ targets:
         INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad: "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight"
         CODE_SIGN_ENTITLEMENTS: VITA/VITA.entitlements
         CODE_SIGN_STYLE: Automatic
+        DEVELOPMENT_TEAM: SFX34PW93C
         SWIFT_VERSION: "5.9"
     dependencies:
       - package: VITAPackage
@@ -63,6 +64,7 @@ targets:
         INFOPLIST_KEY_WKCompanionAppBundleIdentifier: com.abolilagad.vita
         INFOPLIST_KEY_WKWatchOnly: NO
         CODE_SIGN_STYLE: Automatic
+        DEVELOPMENT_TEAM: SFX34PW93C
         SWIFT_VERSION: "5.9"
     dependencies:
       - package: VITAPackage
