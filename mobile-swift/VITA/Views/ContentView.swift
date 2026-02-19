@@ -5,28 +5,38 @@ struct ContentView: View {
     @State var appState: AppState
 
     var body: some View {
-        TabView {
+        TabView(
+            selection: Binding(
+                get: { appState.selectedTab },
+                set: { appState.selectedTab = $0 }
+            )
+        ) {
             DashboardView(appState: appState)
+                .tag(AppState.AppTab.dashboard)
                 .tabItem {
                     Label("Dashboard", systemImage: "heart.text.clipboard")
                 }
 
             AskVITAView(appState: appState)
+                .tag(AppState.AppTab.askVITA)
                 .tabItem {
                     Label("Ask VITA", systemImage: "bubble.left.and.text.bubble.right")
                 }
 
             IntegrationsView(appState: appState)
+                .tag(AppState.AppTab.integrations)
                 .tabItem {
                     Label("Integrations", systemImage: "link")
                 }
 
             TimelineView(appState: appState)
+                .tag(AppState.AppTab.timeline)
                 .tabItem {
                     Label("Timeline", systemImage: "clock.arrow.circlepath")
                 }
 
             SettingsView(appState: appState)
+                .tag(AppState.AppTab.settings)
                 .tabItem {
                     Label("Settings", systemImage: "gearshape")
                 }
@@ -108,7 +118,7 @@ struct ShimmerSkeleton: View {
         RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
             .fill(VITAColors.tertiaryBackground)
             .frame(width: width, height: height)
-            .modifier(ShimmerEffect(cornerRadius: cornerRadius))
+            .modifier(ShimmerEffect())
     }
 }
 
@@ -135,39 +145,8 @@ struct SkeletonCard: View {
 }
 
 private struct ShimmerEffect: ViewModifier {
-    let cornerRadius: CGFloat
-    @State private var phase: CGFloat = -0.9
-
+    @ViewBuilder
     func body(content: Content) -> some View {
         content
-            .overlay {
-                GeometryReader { proxy in
-                    let width = proxy.size.width
-                    let height = proxy.size.height
-
-                    LinearGradient(
-                        stops: [
-                            .init(color: .clear, location: 0.0),
-                            .init(color: Color.white.opacity(0.08), location: 0.35),
-                            .init(color: Color.white.opacity(0.35), location: 0.50),
-                            .init(color: Color.white.opacity(0.08), location: 0.65),
-                            .init(color: .clear, location: 1.0),
-                        ],
-                        startPoint: .top,
-                        endPoint: .bottom
-                    )
-                    .frame(width: width * 0.9, height: height * 1.8)
-                    .rotationEffect(.degrees(18))
-                    .offset(x: phase * width * 1.8, y: 0)
-                }
-                .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
-                .allowsHitTesting(false)
-            }
-            .onAppear {
-                phase = -0.9
-                withAnimation(.linear(duration: 1.15).repeatForever(autoreverses: false)) {
-                    phase = 0.9
-                }
-            }
     }
 }

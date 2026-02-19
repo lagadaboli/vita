@@ -35,6 +35,28 @@ public final class ScreenTimeTracker: @unchecked Sendable {
     }
 
     #if os(iOS)
+    public enum AuthorizationState: Equatable {
+        case notDetermined
+        case denied
+        case approved
+    }
+
+    public func authorizationState() -> AuthorizationState {
+        switch AuthorizationCenter.shared.authorizationStatus {
+        case .approved:
+            return .approved
+        case .denied:
+            return .denied
+        default:
+            return .notDetermined
+        }
+    }
+
+    /// Returns true when Family Controls access is currently granted.
+    public func isAuthorized() -> Bool {
+        authorizationState() == .approved
+    }
+
     /// Request Screen Time authorization.
     public func requestAuthorization() async throws {
         try await AuthorizationCenter.shared.requestAuthorization(for: .individual)

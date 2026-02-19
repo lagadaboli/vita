@@ -7,9 +7,11 @@ struct DashboardView: View {
     var appState: AppState
     @State private var viewModel = DashboardViewModel()
     @State private var isRefreshing = false
+    @State private var hasPerformedInitialLoad = false
 
     private var isComponentLoading: Bool {
-        !appState.isLoaded || ((appState.isHealthSyncing || isRefreshing) && !viewModel.hasAnyData)
+        !appState.isLoaded
+            || ((appState.isHealthSyncing || isRefreshing) && !viewModel.hasAnyData && !viewModel.hasLoaded)
     }
 
     var body: some View {
@@ -64,10 +66,12 @@ struct DashboardView: View {
             .background(VITAColors.background)
             .navigationTitle("VITA")
             .task(id: appState.isLoaded) {
-                await refreshDashboard()
+                guard appState.isLoaded, !hasPerformedInitialLoad else { return }
+                hasPerformedInitialLoad = true
+                await refreshDashboard(force: false)
             }
             .refreshable {
-                await refreshDashboard()
+                await refreshDashboard(force: true)
             }
             .navigationDestination(for: DashboardMetric.self) { metric in
                 MetricHistoryDetailView(
@@ -80,12 +84,17 @@ struct DashboardView: View {
     }
 
     @MainActor
-    private func refreshDashboard() async {
+    private func refreshDashboard(force: Bool) async {
         guard appState.isLoaded else { return }
-        isRefreshing = true
-        defer { isRefreshing = false }
-        await appState.refreshHealthData()
         viewModel.load(from: appState)
+        if force {
+            isRefreshing = true
+        }
+        await appState.refreshHealthDataIfNeeded(maxAge: 120, force: force)
+        viewModel.load(from: appState)
+        if force {
+            isRefreshing = false
+        }
     }
 }
 
@@ -111,7 +120,7 @@ private struct HealthScoreSkeleton: View {
     }
 }
 
-private enum MetricHistoryRange: String, CaseIterable, Identifiable {
+private enum MetricHistoryRange: String, CaseIterable, Identifiable, Sendable {
     case hour = "H"
     case day = "D"
     case week = "W"
@@ -152,14 +161,12 @@ struct MetricHistoryDetailView: View {
     @State private var selectedRange: MetricHistoryRange = .day
     @State private var focusDate = Date()
     @State private var selectedDate: Date?
+    @State private var historyPoints: [DashboardViewModel.MetricHistoryPoint] = []
+    @State private var isPreparingHistory = true
+    @State private var historyTask: Task<Void, Never>?
 
-    private var historyPoints: [DashboardViewModel.MetricHistoryPoint] {
-        let raw = viewModel.history(for: metric)
-            .sorted(by: { $0.timestamp < $1.timestamp })
-        let domain = selectedRange.domain(endingAt: focusDate)
-        let clipped = raw.filter { $0.timestamp >= domain.lowerBound && $0.timestamp <= domain.upperBound }
-
-        return aggregate(clipped, for: selectedRange)
+    private var latestDataDate: Date {
+        viewModel.history(for: metric).map(\.timestamp).max() ?? Date()
     }
 
     private var selectedPoint: DashboardViewModel.MetricHistoryPoint? {
@@ -188,9 +195,17 @@ struct MetricHistoryDetailView: View {
         .background(VITAColors.background)
         .navigationTitle(metric.title)
         .navigationBarTitleDisplayMode(.inline)
+        .onAppear {
+            focusDate = min(latestDataDate, Date())
+            refreshHistoryPoints()
+        }
+        .onDisappear {
+            historyTask?.cancel()
+        }
         .onChange(of: selectedRange) {
-            focusDate = Date()
+            focusDate = min(latestDataDate, Date())
             selectedDate = nil
+            refreshHistoryPoints()
         }
     }
 
@@ -228,7 +243,7 @@ struct MetricHistoryDetailView: View {
             periodNavigator
             rangeValueSummary
 
-            if isLoading && historyPoints.isEmpty {
+            if (isLoading || isPreparingHistory) && historyPoints.isEmpty {
                 VStack(spacing: VITASpacing.sm) {
                     ShimmerSkeleton(width: 130, height: 12, cornerRadius: 6)
                     ShimmerSkeleton(width: 180, height: 12, cornerRadius: 6)
@@ -279,25 +294,7 @@ struct MetricHistoryDetailView: View {
                         AxisValueLabel(format: xAxisFormat)
                     }
                 }
-                .chartOverlay { proxy in
-                    GeometryReader { geometry in
-                        Rectangle()
-                            .fill(.clear)
-                            .contentShape(Rectangle())
-                            .gesture(
-                                DragGesture(minimumDistance: 0)
-                                    .onChanged { gesture in
-                                        guard let plotFrame = proxy.plotFrame else { return }
-                                        let frame = geometry[plotFrame]
-                                        let positionX = gesture.location.x - frame.origin.x
-                                        guard positionX >= 0, positionX <= frame.size.width else { return }
-                                        if let value: Date = proxy.value(atX: positionX) {
-                                            selectedDate = value
-                                        }
-                                    }
-                            )
-                    }
-                }
+                .chartXSelection(value: $selectedDate)
                 .frame(height: 260)
             }
         }
@@ -517,11 +514,37 @@ struct MetricHistoryDetailView: View {
         let now = Date()
         focusDate = min(shifted ?? focusDate, now)
         selectedDate = nil
+        refreshHistoryPoints()
     }
 
-    private func aggregate(
+    @MainActor
+    private func refreshHistoryPoints() {
+        historyTask?.cancel()
+
+        let sourcePoints = viewModel.history(for: metric)
+        let range = selectedRange
+        let domain = range.domain(endingAt: focusDate)
+        let strategy = aggregationStrategy
+
+        isPreparingHistory = true
+        historyTask = Task.detached(priority: .userInitiated) {
+            let clipped = sourcePoints
+                .filter { $0.timestamp >= domain.lowerBound && $0.timestamp <= domain.upperBound }
+                .sorted(by: { $0.timestamp < $1.timestamp })
+            let aggregated = Self.aggregate(clipped, for: range, strategy: strategy)
+            guard !Task.isCancelled else { return }
+
+            await MainActor.run {
+                historyPoints = aggregated
+                isPreparingHistory = false
+            }
+        }
+    }
+
+    nonisolated private static func aggregate(
         _ points: [DashboardViewModel.MetricHistoryPoint],
-        for range: MetricHistoryRange
+        for range: MetricHistoryRange,
+        strategy: Aggregation
     ) -> [DashboardViewModel.MetricHistoryPoint] {
         guard !points.isEmpty else { return [] }
         let calendar = Calendar.current
@@ -533,7 +556,7 @@ struct MetricHistoryDetailView: View {
             guard let values = grouped[bucket] else { return nil }
             let aggregatedValue: Double
 
-            switch aggregationStrategy {
+            switch strategy {
             case .sum:
                 aggregatedValue = values.reduce(0.0) { $0 + $1.value }
             case .latest:
@@ -547,7 +570,7 @@ struct MetricHistoryDetailView: View {
         }
     }
 
-    private func bucketStart(for date: Date, in range: MetricHistoryRange, calendar: Calendar) -> Date {
+    nonisolated private static func bucketStart(for date: Date, in range: MetricHistoryRange, calendar: Calendar) -> Date {
         switch range {
         case .hour:
             let minute = calendar.component(.minute, from: date)
@@ -583,7 +606,7 @@ struct MetricHistoryDetailView: View {
         }
     }
 
-    private enum Aggregation {
+    private enum Aggregation: Sendable {
         case sum
         case average
         case latest

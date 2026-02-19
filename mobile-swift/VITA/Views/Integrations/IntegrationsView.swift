@@ -1,14 +1,17 @@
 import SwiftUI
 import VITADesignSystem
+#if canImport(UIKit)
+import UIKit
+#endif
 
 struct IntegrationsView: View {
     var appState: AppState
     @State private var viewModel = IntegrationsViewModel()
     @State private var isRefreshing = false
-    private let refreshTimer = Timer.publish(every: 60, on: .main, in: .common).autoconnect()
 
     private var isSectionLoading: Bool {
-        isRefreshing || appState.isHealthSyncing || !appState.isLoaded
+        !appState.isLoaded
+            || ((isRefreshing || appState.isHealthSyncing) && !viewModel.hasAnyData && !viewModel.hasLoaded)
     }
 
     var body: some View {
@@ -37,28 +40,51 @@ struct IntegrationsView: View {
             .background(VITAColors.background)
             .navigationTitle("Integrations")
             .task(id: appState.isLoaded) {
-                await refreshIntegrations()
+                guard appState.isLoaded else { return }
+                await refreshIntegrations(force: false)
+            }
+            .task(id: appState.lastHealthRefreshAt) {
+                guard appState.isLoaded else { return }
+                viewModel.load(from: appState)
+            }
+            .task(id: appState.lastDeliveryRefreshAt) {
+                guard appState.isLoaded else { return }
+                viewModel.load(from: appState)
+            }
+            .onAppear {
+                Task {
+                    await refreshIntegrations(force: false)
+                }
+            }
+            .onChange(of: appState.selectedTab) { _, selectedTab in
+                guard selectedTab == .integrations else { return }
+                Task {
+                    await refreshIntegrations(force: false)
+                }
+            }
+            .onChange(of: appState.screenTimeStatus) { _, _ in
+                viewModel.load(from: appState)
             }
             .refreshable {
-                await refreshIntegrations()
-            }
-            .onReceive(refreshTimer) { _ in
-                Task {
-                    await refreshIntegrations()
-                }
+                await refreshIntegrations(force: true)
             }
         }
     }
 
     @MainActor
-    private func refreshIntegrations() async {
+    private func refreshIntegrations(force: Bool) async {
         guard appState.isLoaded else { return }
-        isRefreshing = true
-        defer { isRefreshing = false }
-
-        await appState.refreshHealthData()
-        await appState.refreshDeliveryOrders()
         viewModel.load(from: appState)
+        if force {
+            isRefreshing = true
+        }
+
+        await appState.refreshHealthDataIfNeeded(maxAge: 150, force: force)
+        await appState.refreshDeliveryOrdersIfNeeded(maxAge: 300, force: force)
+        viewModel.load(from: appState)
+        if force {
+            isRefreshing = false
+        }
     }
 }
 
@@ -66,7 +92,7 @@ struct ScreenTimeSection: View {
     let viewModel: IntegrationsViewModel
     let appState: AppState
     let isLoading: Bool
-    @State private var isRequestingPermission = false
+    @State private var showManualScreenTimeHelp = false
 
     private var isAuthorized: Bool {
         if case .authorized = appState.screenTimeStatus {
@@ -109,20 +135,11 @@ struct ScreenTimeSection: View {
                         message: statusMessage
                     )
                     Button {
-                        Task {
-                            isRequestingPermission = true
-                            defer { isRequestingPermission = false }
-                            await appState.requestScreenTimeAuthorization()
-                        }
+                        openScreenTimeSystemSettings()
                     } label: {
                         HStack(spacing: VITASpacing.sm) {
-                            if isRequestingPermission {
-                                ProgressView()
-                                    .tint(VITAColors.teal)
-                            } else {
-                                Image(systemName: "lock.shield")
-                            }
-                            Text(isRequestingPermission ? "Requesting Permission..." : "Enable Screen Time Access")
+                            Image(systemName: "lock.shield")
+                            Text("Enable Screen Time Access")
                                 .font(VITATypography.headline)
                         }
                         .frame(maxWidth: .infinity)
@@ -130,7 +147,6 @@ struct ScreenTimeSection: View {
                     }
                     .buttonStyle(.borderedProminent)
                     .tint(VITAColors.teal)
-                    .disabled(isRequestingPermission)
                 }
             } else if viewModel.zombieScrollSessions.isEmpty {
                 EmptyDataStateView(
@@ -142,6 +158,38 @@ struct ScreenTimeSection: View {
             } else {
                 ForEach(viewModel.zombieScrollSessions) { session in
                     ZombieScrollCard(session: session)
+                }
+            }
+        }
+        .alert("Open Screen Time Manually", isPresented: $showManualScreenTimeHelp) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text("Go to iPhone Settings > Screen Time > Apps with Screen Time Access > VITA.")
+        }
+    }
+
+    private func openScreenTimeSystemSettings() {
+        #if canImport(UIKit)
+        let candidates = [
+            URL(string: "App-prefs:SCREEN_TIME&path=APPS_WITH_SCREEN_TIME_ACCESS"),
+            URL(string: "App-prefs:root=SCREEN_TIME&path=APPS_WITH_SCREEN_TIME_ACCESS"),
+            URL(string: "App-prefs:SCREEN_TIME"),
+            URL(string: "App-prefs:root=SCREEN_TIME"),
+            URL(string: "App-prefs:"),
+        ].compactMap { $0 }
+        openSettingsCandidate(candidates)
+        #endif
+    }
+
+    private func openSettingsCandidate(_ candidates: [URL]) {
+        guard let url = candidates.first else { return }
+        UIApplication.shared.open(url, options: [:]) { opened in
+            if !opened {
+                let remaining = Array(candidates.dropFirst())
+                if remaining.isEmpty {
+                    showManualScreenTimeHelp = true
+                } else {
+                    openSettingsCandidate(remaining)
                 }
             }
         }

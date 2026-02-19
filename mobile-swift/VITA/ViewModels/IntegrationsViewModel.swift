@@ -35,6 +35,21 @@ final class IntegrationsViewModel {
 
     // Environment readings
     var environmentReadings: [EnvironmentReading] = []
+    var hasLoaded = false
+
+    var hasAnyData: Bool {
+        watchSyncDate != .distantPast
+            || watchHRV > 0
+            || watchHR > 0
+            || watchSteps > 0
+            || !doordashOrders.isEmpty
+            || !rotimaticSessions.isEmpty
+            || !instantPotPrograms.isEmpty
+            || !instacartOrders.isEmpty
+            || !weightReadings.isEmpty
+            || !zombieScrollSessions.isEmpty
+            || !environmentReadings.isEmpty
+    }
 
     struct DoorDashOrder: Identifiable {
         let id = UUID()
@@ -333,6 +348,7 @@ final class IntegrationsViewModel {
                 )
             }
         }
+        hasLoaded = true
     }
 
     private func preferredWatchSamples(from samples: [PhysiologicalSample]) -> [PhysiologicalSample] {

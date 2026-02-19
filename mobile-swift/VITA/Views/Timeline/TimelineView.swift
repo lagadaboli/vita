@@ -6,6 +6,11 @@ struct TimelineView: View {
     @State private var viewModel = TimelineViewModel()
     @State private var isRefreshing = false
 
+    private var isComponentLoading: Bool {
+        !appState.isLoaded
+            || ((isRefreshing || appState.isHealthSyncing) && viewModel.filteredEvents.isEmpty && !viewModel.hasLoaded)
+    }
+
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
@@ -16,14 +21,14 @@ struct TimelineView: View {
 
                 ScrollView {
                     LazyVStack(spacing: VITASpacing.md) {
-                        if isRefreshing || appState.isHealthSyncing || !appState.isLoaded {
+                        if isComponentLoading {
                             ForEach(0..<5, id: \.self) { _ in
                                 SkeletonCard(lines: [120, 180, 90], lineHeight: 11)
                             }
                         } else if viewModel.filteredEvents.isEmpty {
                             EmptyDataStateView(
-                                title: "No Timeline Data Yet",
-                                message: "Once HealthKit and integrations sync, your events will appear here."
+                                title: viewModel.emptyStateTitle,
+                                message: viewModel.emptyStateMessage
                             )
                         } else {
                             ForEach(viewModel.filteredEvents) { event in
@@ -38,21 +43,41 @@ struct TimelineView: View {
             .background(VITAColors.background)
             .navigationTitle("Timeline")
             .task(id: appState.isLoaded) {
-                await refreshTimeline()
+                guard appState.isLoaded else { return }
+                await refreshTimeline(force: false)
+            }
+            .task(id: appState.lastHealthRefreshAt) {
+                guard appState.isLoaded else { return }
+                viewModel.load(from: appState)
+            }
+            .onAppear {
+                Task {
+                    await refreshTimeline(force: false)
+                }
+            }
+            .onChange(of: appState.screenTimeStatus) { _, _ in
+                Task {
+                    await refreshTimeline(force: false)
+                }
             }
             .refreshable {
-                await refreshTimeline()
+                await refreshTimeline(force: true)
             }
         }
     }
 
     @MainActor
-    private func refreshTimeline() async {
+    private func refreshTimeline(force: Bool) async {
         guard appState.isLoaded else { return }
-        isRefreshing = true
-        defer { isRefreshing = false }
-
-        await appState.refreshHealthData()
         viewModel.load(from: appState)
+        if force {
+            isRefreshing = true
+        }
+
+        await appState.refreshHealthDataIfNeeded(maxAge: 150, force: force)
+        viewModel.load(from: appState)
+        if force {
+            isRefreshing = false
+        }
     }
 }

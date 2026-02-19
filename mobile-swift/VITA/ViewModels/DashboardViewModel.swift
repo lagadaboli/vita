@@ -74,6 +74,7 @@ final class DashboardViewModel {
     var weightHistory: [MetricHistoryPoint] = []
     var stepsHistory: [MetricHistoryPoint] = []
     var dopamineDebtHistory: [MetricHistoryPoint] = []
+    var hasLoaded = false
 
     struct MetricHistoryPoint: Identifiable, Sendable {
         let id = UUID()
@@ -241,6 +242,7 @@ final class DashboardViewModel {
 
         computeHealthScore()
         generateInsights()
+        hasLoaded = true
     }
 
     func history(for metric: DashboardMetric) -> [MetricHistoryPoint] {

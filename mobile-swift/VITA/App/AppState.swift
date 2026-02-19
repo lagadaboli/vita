@@ -14,6 +14,14 @@ import HealthKit
 @MainActor
 @Observable
 final class AppState {
+    enum AppTab: Hashable {
+        case dashboard
+        case askVITA
+        case integrations
+        case timeline
+        case settings
+    }
+
     enum DataMode: String {
         case sampleData
         case live
@@ -32,7 +40,9 @@ final class AppState {
     var isHealthSyncing = false
     var loadError: String?
     var dataMode: DataMode = .live
+    var selectedTab: AppTab = .dashboard
     var lastHealthRefreshAt: Date?
+    var lastDeliveryRefreshAt: Date?
     var screenTimeStatus: ScreenTimeStatus = .notConfigured
 
     #if canImport(HealthKit)
@@ -162,12 +172,30 @@ final class AppState {
 
         // 3. Screen Time
         let tracker = ScreenTimeTracker(database: database, healthGraph: healthGraph)
+        self.screenTimeTracker = tracker
         #if os(iOS)
         do {
-            try await tracker.requestAuthorization()
-            try tracker.startMonitoring()
-            screenTimeStatus = .authorized
-            ingestPendingScreenTimeData()
+            if tracker.authorizationState() != .approved {
+                try await tracker.requestAuthorization()
+            }
+
+            switch tracker.authorizationState() {
+            case .approved:
+                screenTimeStatus = .authorized
+                do {
+                    try tracker.startMonitoring()
+                } catch {
+                    // Authorization succeeded; keep feature enabled and ingest any pending events.
+                    #if DEBUG
+                    print("[AppState] Screen Time monitoring setup failed: \(error.localizedDescription)")
+                    #endif
+                }
+                ingestPendingScreenTimeData()
+            case .denied:
+                screenTimeStatus = .unavailable("Permission denied. Enable Screen Time access in Settings.")
+            case .notDetermined:
+                screenTimeStatus = .notConfigured
+            }
         } catch {
             screenTimeStatus = .unavailable(error.localizedDescription)
             // Screen Time is non-critical; continue without it
@@ -176,7 +204,6 @@ final class AppState {
             #endif
         }
         #endif
-        self.screenTimeTracker = tracker
 
         // Fall back to sample data if HealthKit is unavailable
         if !healthKitAvailable {
@@ -399,16 +426,20 @@ final class AppState {
             print("[AppState] Instacart sync failed: \(error.localizedDescription)")
             #endif
         }
+
+        lastDeliveryRefreshAt = Date()
     }
 
     /// Force a foreground HealthKit sync so dashboard metrics match Apple Health as closely as possible.
     func refreshHealthData() async {
+        guard !isHealthSyncing else { return }
         isHealthSyncing = true
         defer { isHealthSyncing = false }
 
         #if canImport(HealthKit)
         guard healthKitManager != nil else {
             ingestPendingScreenTimeData()
+            lastHealthRefreshAt = Date()
             return
         }
 
@@ -423,14 +454,54 @@ final class AppState {
         ingestPendingScreenTimeData()
     }
 
+    func refreshHealthDataIfNeeded(maxAge: TimeInterval = 120, force: Bool = false) async {
+        if !force, !shouldRefresh(lastRefreshAt: lastHealthRefreshAt, maxAge: maxAge) {
+            ingestPendingScreenTimeData()
+            return
+        }
+        await refreshHealthData()
+    }
+
+    func refreshDeliveryOrdersIfNeeded(maxAge: TimeInterval = 300, force: Bool = false) async {
+        if !force, !shouldRefresh(lastRefreshAt: lastDeliveryRefreshAt, maxAge: maxAge) {
+            ingestPendingScreenTimeData()
+            return
+        }
+        await refreshDeliveryOrders()
+    }
+
     func requestScreenTimeAuthorization() async {
-        guard let tracker = screenTimeTracker else { return }
+        let tracker: ScreenTimeTracker
+        if let existing = screenTimeTracker {
+            tracker = existing
+        } else {
+            let created = ScreenTimeTracker(database: database, healthGraph: healthGraph)
+            screenTimeTracker = created
+            tracker = created
+        }
+
         #if os(iOS)
         do {
-            try await tracker.requestAuthorization()
-            try tracker.startMonitoring()
-            screenTimeStatus = .authorized
-            ingestPendingScreenTimeData()
+            if tracker.authorizationState() != .approved {
+                try await tracker.requestAuthorization()
+            }
+
+            switch tracker.authorizationState() {
+            case .approved:
+                screenTimeStatus = .authorized
+                do {
+                    try tracker.startMonitoring()
+                } catch {
+                    #if DEBUG
+                    print("[AppState] Screen Time monitoring setup failed: \(error.localizedDescription)")
+                    #endif
+                }
+                ingestPendingScreenTimeData()
+            case .denied:
+                screenTimeStatus = .unavailable("Permission denied. Enable Screen Time access in Settings.")
+            case .notDetermined:
+                screenTimeStatus = .notConfigured
+            }
         } catch {
             screenTimeStatus = .unavailable(error.localizedDescription)
             #if DEBUG
@@ -449,5 +520,10 @@ final class AppState {
             print("[AppState] Screen Time ingest failed: \(error.localizedDescription)")
             #endif
         }
+    }
+
+    private func shouldRefresh(lastRefreshAt: Date?, maxAge: TimeInterval) -> Bool {
+        guard let lastRefreshAt else { return true }
+        return Date().timeIntervalSince(lastRefreshAt) >= maxAge
     }
 }
