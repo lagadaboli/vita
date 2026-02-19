@@ -2,7 +2,6 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-	<!-- Required bundle identity keys (normally injected by GENERATE_INFOPLIST_FILE) -->
 	<key>CFBundleIdentifier</key>
 	<string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
 	<key>CFBundleExecutable</key>
@@ -19,37 +18,17 @@
 	<string>$(PRODUCT_BUNDLE_PACKAGE_TYPE)</string>
 	<key>CFBundleInfoDictionaryVersion</key>
 	<string>6.0</string>
-
-	<!-- HealthKit privacy strings -->
-	<key>NSHealthShareUsageDescription</key>
-	<string>VITA reads your HRV, heart rate, glucose, sleep, steps, and energy data to identify causal patterns between your lifestyle and how you feel.</string>
-	<key>NSHealthUpdateUsageDescription</key>
-	<string>VITA does not write to Health.</string>
-
-	<!-- Background delivery for HealthKit observer queries -->
-	<key>UIBackgroundModes</key>
-	<array>
-		<string>processing</string>
-	</array>
-
-	<!-- Scene manifest -->
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>
 		<false/>
 	</dict>
-
-	<!-- Launch screen -->
 	<key>UILaunchScreen</key>
 	<dict/>
-
-	<!-- Supported orientations (iPhone) -->
 	<key>UISupportedInterfaceOrientations</key>
 	<array>
 		<string>UIInterfaceOrientationPortrait</string>
 	</array>
-
-	<!-- Supported orientations (iPad) -->
 	<key>UISupportedInterfaceOrientations~ipad</key>
 	<array>
 		<string>UIInterfaceOrientationPortrait</string>

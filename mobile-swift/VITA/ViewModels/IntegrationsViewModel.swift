@@ -200,22 +200,6 @@ final class IntegrationsViewModel {
                 }
         }
 
-        // Apple Watch live metrics — latest HRV, resting HR, and today's steps from HealthGraph
-        if let samples = try? appState.healthGraph.querySamples(type: .hrvSDNN, from: weekAgo, to: now),
-           let latest = samples.last {
-            watchHRV = latest.value
-            watchSyncDate = latest.timestamp
-        }
-        if let samples = try? appState.healthGraph.querySamples(type: .restingHeartRate, from: weekAgo, to: now),
-           let latest = samples.last {
-            watchHR = latest.value
-            if latest.timestamp > watchSyncDate { watchSyncDate = latest.timestamp }
-        }
-        let startOfDay = calendar.startOfDay(for: now)
-        if let samples = try? appState.healthGraph.querySamples(type: .stepCount, from: startOfDay, to: now) {
-            watchSteps = Int(samples.map(\.value).reduce(0, +))
-        }
-
         // Environment readings
         if let conditions = try? appState.healthGraph.queryEnvironment(from: weekAgo, to: now) {
             environmentReadings = conditions.suffix(7).map { condition in

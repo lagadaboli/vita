@@ -1,5 +1,8 @@
 import Foundation
 import CryptoKit
+#if canImport(UIKit)
+import UIKit
+#endif
 
 /// Client for posting SMS escalation requests to the backend.
 /// Twilio credentials stay server-side only — this client only sends hashed identifiers.
