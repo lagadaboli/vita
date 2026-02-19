@@ -35,6 +35,12 @@ struct ContentView: View {
                     Label("Timeline", systemImage: "clock.arrow.circlepath")
                 }
 
+            SkinHealthView(appState: appState)
+                .tag(AppState.AppTab.skinAudit)
+                .tabItem {
+                    Label("Skin", systemImage: "face.smiling")
+                }
+
             SettingsView(appState: appState)
                 .tag(AppState.AppTab.settings)
                 .tabItem {

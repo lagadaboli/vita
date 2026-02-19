@@ -10,6 +10,7 @@ final class AppState {
         case askVITA
         case integrations
         case timeline
+        case skinAudit
         case settings
     }
 
