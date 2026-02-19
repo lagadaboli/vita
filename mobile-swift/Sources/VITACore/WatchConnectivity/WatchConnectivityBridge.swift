@@ -6,6 +6,14 @@ import WatchConnectivity
 /// Bridges iPhone ↔ Watch communication for nudge delivery.
 /// Uses `transferUserInfo()` to queue delivery even if Watch is unreachable.
 public final class WatchConnectivityBridge: NSObject, WCSessionDelegate, Sendable {
+    public struct ConnectionStatus: Sendable {
+        public let isSupported: Bool
+        public let isPaired: Bool
+        public let isWatchAppInstalled: Bool
+        public let isReachable: Bool
+        public let isActivated: Bool
+    }
+
     public static let shared = WatchConnectivityBridge()
 
     private let session: WCSession
@@ -28,6 +36,17 @@ public final class WatchConnectivityBridge: NSObject, WCSessionDelegate, Sendabl
 
         let dict = payload.toDictionary()
         session.transferUserInfo(dict)
+    }
+
+    /// Returns the current watch connectivity state for UI health/status screens.
+    public func connectionStatus() -> ConnectionStatus {
+        ConnectionStatus(
+            isSupported: WCSession.isSupported(),
+            isPaired: session.isPaired,
+            isWatchAppInstalled: session.isWatchAppInstalled,
+            isReachable: session.isReachable,
+            isActivated: session.activationState == .activated
+        )
     }
 
     // MARK: - WCSessionDelegate

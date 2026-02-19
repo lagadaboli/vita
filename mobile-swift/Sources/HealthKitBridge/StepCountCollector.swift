@@ -100,13 +100,16 @@ public final class StepCountCollector: @unchecked Sendable {
         for sample in samples {
             guard let quantitySample = sample as? HKQuantitySample else { continue }
             let steps = quantitySample.quantity.doubleValue(for: HKUnit.count())
+            let sampleMetadata = healthMetadata(for: quantitySample)
+            let isWatchSample = sampleMetadata["is_watch_sample"] == "true"
 
             var physiologicalSample = PhysiologicalSample(
                 metricType: .stepCount,
                 value: steps,
                 unit: "count",
                 timestamp: quantitySample.startDate,
-                source: .appleWatch
+                source: isWatchSample ? .appleWatch : .manual,
+                metadata: sampleMetadata
             )
             try healthGraph.ingest(&physiologicalSample)
         }
@@ -120,6 +123,32 @@ public final class StepCountCollector: @unchecked Sendable {
             )
             try state.save(to: database)
         }
+    }
+
+    private func healthMetadata(for sample: HKSample) -> [String: String] {
+        let sourceName = sample.sourceRevision.source.name
+        let bundleIdentifier = sample.sourceRevision.source.bundleIdentifier
+        let productType = sample.sourceRevision.productType ?? "unknown"
+        let deviceModel = sample.device?.model ?? "unknown"
+        let isWatch = isAppleWatchSample(sample)
+
+        return [
+            "hk_source_name": sourceName,
+            "hk_bundle_id": bundleIdentifier,
+            "hk_product_type": productType,
+            "hk_device_model": deviceModel,
+            "is_watch_sample": isWatch ? "true" : "false",
+        ]
+    }
+
+    private func isAppleWatchSample(_ sample: HKSample) -> Bool {
+        let sourceName = sample.sourceRevision.source.name.lowercased()
+        let productType = sample.sourceRevision.productType?.lowercased() ?? ""
+        let deviceModel = sample.device?.model?.lowercased() ?? ""
+
+        return sourceName.contains("watch")
+            || productType.contains("watch")
+            || deviceModel.contains("watch")
     }
     #endif
 }

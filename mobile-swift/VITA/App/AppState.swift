@@ -387,6 +387,24 @@ final class AppState {
         }
     }
 
+    /// Force a foreground HealthKit sync so dashboard metrics match Apple Health as closely as possible.
+    func refreshHealthData() async {
+        #if canImport(HealthKit)
+        guard healthKitManager != nil else {
+            ingestPendingScreenTimeData()
+            return
+        }
+
+        try? await hrvCollector?.performIncrementalSync()
+        try? await heartRateCollector?.performIncrementalSync()
+        try? await glucoseCollector?.performIncrementalSync()
+        try? await sleepCollector?.performIncrementalSync()
+        try? await stepCountCollector?.performIncrementalSync()
+        #endif
+
+        ingestPendingScreenTimeData()
+    }
+
     private func ingestPendingScreenTimeData() {
         guard let tracker = screenTimeTracker else { return }
         do {

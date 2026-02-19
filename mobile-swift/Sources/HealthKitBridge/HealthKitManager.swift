@@ -18,6 +18,7 @@ public final class HealthKitManager: @unchecked Sendable {
     public static let requiredReadTypes: Set<String> = [
         "HKQuantityTypeIdentifierHeartRateVariabilitySDNN",
         "HKQuantityTypeIdentifierRestingHeartRate",
+        "HKQuantityTypeIdentifierBodyMass",
         "HKQuantityTypeIdentifierBloodGlucose",
         "HKQuantityTypeIdentifierOxygenSaturation",
         "HKQuantityTypeIdentifierRespiratoryRate",
@@ -43,6 +44,7 @@ public final class HealthKitManager: @unchecked Sendable {
         let readTypes: Set<HKObjectType> = [
             HKQuantityType.quantityType(forIdentifier: .heartRateVariabilitySDNN)!,
             HKQuantityType.quantityType(forIdentifier: .restingHeartRate)!,
+            HKQuantityType.quantityType(forIdentifier: .bodyMass)!,
             HKQuantityType.quantityType(forIdentifier: .bloodGlucose)!,
             HKQuantityType.quantityType(forIdentifier: .oxygenSaturation)!,
             HKQuantityType.quantityType(forIdentifier: .respiratoryRate)!,

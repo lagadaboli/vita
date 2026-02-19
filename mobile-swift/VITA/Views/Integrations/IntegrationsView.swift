@@ -27,12 +27,14 @@ struct IntegrationsView: View {
             .onAppear {
                 viewModel.load(from: appState)
                 Task {
+                    await appState.refreshHealthData()
                     await appState.refreshDeliveryOrders()
                     viewModel.load(from: appState)
                 }
             }
             .onReceive(refreshTimer) { _ in
                 Task {
+                    await appState.refreshHealthData()
                     await appState.refreshDeliveryOrders()
                     viewModel.load(from: appState)
                 }

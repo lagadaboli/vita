@@ -6,10 +6,12 @@ import VITADesignSystem
 @Observable
 final class IntegrationsViewModel {
     // Apple Watch
-    var watchSyncDate = Date().addingTimeInterval(-300)
-    var watchHRV: Double = 52
-    var watchHR: Double = 64
-    var watchSteps: Int = 4800
+    var watchSyncDate = Date.distantPast
+    var watchHRV: Double = 0
+    var watchHR: Double = 0
+    var watchSteps: Int = 0
+    var watchConnectionStatus: ConnectionStatus = .syncing
+    var watchConnectionDetail: String = "Checking status..."
 
     // DoorDash orders
     var doordashOrders: [DoorDashOrder] = []
@@ -111,26 +113,57 @@ final class IntegrationsViewModel {
         let dayStart = calendar.startOfDay(for: now)
         let weekAgo = calendar.date(byAdding: .day, value: -7, to: now) ?? now
 
-        // Apple Watch / HealthKit-backed metrics
+        // Apple Watch connectivity status.
+        #if canImport(WatchConnectivity)
+        let watchStatus = WatchConnectivityBridge.shared.connectionStatus()
+        if watchStatus.isSupported {
+            if watchStatus.isPaired {
+                if watchStatus.isWatchAppInstalled {
+                    watchConnectionStatus = watchStatus.isReachable ? .connected : .syncing
+                    watchConnectionDetail = watchStatus.isReachable
+                        ? "Paired and reachable"
+                        : "Paired, app installed"
+                } else {
+                    watchConnectionStatus = .notConfigured
+                    watchConnectionDetail = "Watch app not installed"
+                }
+            } else {
+                watchConnectionStatus = .disconnected
+                watchConnectionDetail = "No paired Apple Watch"
+            }
+        } else {
+            watchConnectionStatus = .notConfigured
+            watchConnectionDetail = "Watch connectivity unavailable"
+        }
+        #else
+        watchConnectionStatus = .notConfigured
+        watchConnectionDetail = "Watch connectivity unavailable"
+        #endif
+
+        // Apple Watch / HealthKit-backed metrics.
         var latestWatchSync: Date?
 
-        if let hrvSamples = try? appState.healthGraph.querySamples(type: .hrvSDNN, from: dayStart, to: now),
-           let latest = hrvSamples.last {
-            watchHRV = latest.value
-            latestWatchSync = maxDate(latestWatchSync, latest.timestamp)
+        if let hrvSamples = try? appState.healthGraph.querySamples(type: .hrvSDNN, from: dayStart, to: now) {
+            let preferredSamples = preferredWatchSamples(from: hrvSamples)
+            if let latest = preferredSamples.last {
+                watchHRV = latest.value
+                latestWatchSync = maxDate(latestWatchSync, latest.timestamp)
+            }
         }
 
-        if let hrSamples = try? appState.healthGraph.querySamples(type: .restingHeartRate, from: dayStart, to: now),
-           let latest = hrSamples.last {
-            watchHR = latest.value
-            latestWatchSync = maxDate(latestWatchSync, latest.timestamp)
+        if let hrSamples = try? appState.healthGraph.querySamples(type: .restingHeartRate, from: dayStart, to: now) {
+            let preferredSamples = preferredWatchSamples(from: hrSamples)
+            if let latest = preferredSamples.last {
+                watchHR = latest.value
+                latestWatchSync = maxDate(latestWatchSync, latest.timestamp)
+            }
         }
 
         if let stepSamples = try? appState.healthGraph.querySamples(type: .stepCount, from: dayStart, to: now),
            !stepSamples.isEmpty {
-            // Step count is stored as per-sample counts; show today's aggregate.
-            watchSteps = Int(stepSamples.reduce(0.0) { $0 + $1.value })
-            latestWatchSync = maxDate(latestWatchSync, stepSamples.last?.timestamp)
+            let preferredSamples = preferredWatchSamples(from: stepSamples)
+            watchSteps = Int(preferredSamples.reduce(0.0) { $0 + $1.value }.rounded())
+            latestWatchSync = maxDate(latestWatchSync, preferredSamples.last?.timestamp)
         }
 
         if let latestWatchSync {
@@ -286,6 +319,21 @@ final class IntegrationsViewModel {
                 )
             }
         }
+    }
+
+    private func preferredWatchSamples(from samples: [PhysiologicalSample]) -> [PhysiologicalSample] {
+        let watchSamples = samples.filter(isWatchSample)
+        return watchSamples.isEmpty ? samples : watchSamples
+    }
+
+    private func isWatchSample(_ sample: PhysiologicalSample) -> Bool {
+        if sample.source == .appleWatch {
+            return true
+        }
+        if sample.metadata?["is_watch_sample"] == "true" {
+            return true
+        }
+        return false
     }
 
     private func maxDate(_ lhs: Date?, _ rhs: Date?) -> Date? {

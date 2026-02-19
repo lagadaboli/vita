@@ -13,18 +13,34 @@ struct AppleWatchSection: View {
                 Text("Apple Watch")
                     .font(VITATypography.title3)
                 Spacer()
-                ConnectionStatusBadge(name: "", icon: "checkmark.circle.fill", status: .connected)
+                ConnectionStatusBadge(name: "", icon: "applewatch", status: viewModel.watchConnectionStatus)
             }
 
             VStack(spacing: VITASpacing.md) {
+                HStack {
+                    Text("Connection")
+                        .font(VITATypography.caption)
+                        .foregroundStyle(VITAColors.textSecondary)
+                    Spacer()
+                    Text(viewModel.watchConnectionDetail)
+                        .font(VITATypography.caption)
+                        .foregroundStyle(VITAColors.textTertiary)
+                }
+
                 HStack {
                     Text("Last sync")
                         .font(VITATypography.caption)
                         .foregroundStyle(VITAColors.textSecondary)
                     Spacer()
-                    Text(viewModel.watchSyncDate, style: .relative)
-                        .font(VITATypography.caption)
-                        .foregroundStyle(VITAColors.textTertiary)
+                    if viewModel.watchSyncDate == Date.distantPast {
+                        Text("No sync yet")
+                            .font(VITATypography.caption)
+                            .foregroundStyle(VITAColors.textTertiary)
+                    } else {
+                        Text(viewModel.watchSyncDate, style: .relative)
+                            .font(VITATypography.caption)
+                            .foregroundStyle(VITAColors.textTertiary)
+                    }
                 }
 
                 Divider()
