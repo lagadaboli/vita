@@ -52,6 +52,16 @@ final class AppState {
         return URL(string: "http://127.0.0.1:8000")!
     }()
 
+    /// Toggle Rotimatic mock sessions from Info.plist (default: enabled for dev).
+    private static let rotimaticMockEnabled: Bool = {
+        if let configured = Bundle.main.object(
+            forInfoDictionaryKey: "VITAMockRotimaticEnabled"
+        ) as? Bool {
+            return configured
+        }
+        return true
+    }()
+
     /// On-device LLM service for narrative generation (Metal-accelerated).
     #if canImport(MLXLLM) && canImport(Metal)
     let llmService: MLXLLMService
@@ -159,6 +169,10 @@ final class AppState {
         self.consumptionBridge = bridge
         await refreshDeliveryOrders()
 
+        if Self.rotimaticMockEnabled {
+            seedMockRotimaticSessionsIfNeeded()
+        }
+
         // Background-load the on-device LLM (non-blocking)
         #if canImport(MLXLLM) && canImport(Metal)
         Task.detached(priority: .background) { [llmService] in
@@ -181,6 +195,74 @@ final class AppState {
             try generator.generateAll()
         } catch {
             loadError = error.localizedDescription
+        }
+    }
+
+    private func seedMockRotimaticSessionsIfNeeded() {
+        let now = Date()
+        let lookbackStart = Calendar.current.date(byAdding: .day, value: -7, to: now)
+            ?? now.addingTimeInterval(-7 * 24 * 60 * 60)
+
+        let hasRotimaticData = (try? healthGraph.queryMeals(from: lookbackStart, to: now)
+            .contains(where: { $0.source == .rotimaticNext })) ?? false
+        guard !hasRotimaticData else { return }
+
+        let mockSessions: [MealEvent] = [
+            MealEvent(
+                timestamp: now.addingTimeInterval(-2.0 * 60 * 60),
+                source: .rotimaticNext,
+                eventType: .mealPreparation,
+                ingredients: [
+                    MealEvent.Ingredient(
+                        name: "Whole Wheat Flour",
+                        quantityGrams: 150,
+                        glycemicIndex: 62,
+                        type: "grain"
+                    ),
+                    MealEvent.Ingredient(name: "Water", quantityML: 95, type: "liquid")
+                ],
+                cookingMethod: "rotimatic_whole_wheat_standard",
+                estimatedGlycemicLoad: 24,
+                confidence: 0.92
+            ),
+            MealEvent(
+                timestamp: now.addingTimeInterval(-27.0 * 60 * 60),
+                source: .rotimaticNext,
+                eventType: .mealPreparation,
+                ingredients: [
+                    MealEvent.Ingredient(
+                        name: "Maida Flour",
+                        quantityGrams: 120,
+                        glycemicIndex: 78,
+                        type: "grain"
+                    ),
+                    MealEvent.Ingredient(name: "Water", quantityML: 80, type: "liquid")
+                ],
+                cookingMethod: "rotimatic_maida_fast",
+                estimatedGlycemicLoad: 38,
+                confidence: 0.90
+            ),
+            MealEvent(
+                timestamp: now.addingTimeInterval(-3.0 * 24 * 60 * 60),
+                source: .rotimaticNext,
+                eventType: .mealPreparation,
+                ingredients: [
+                    MealEvent.Ingredient(
+                        name: "Multigrain Flour",
+                        quantityGrams: 90,
+                        glycemicIndex: 54,
+                        type: "grain"
+                    ),
+                    MealEvent.Ingredient(name: "Water", quantityML: 60, type: "liquid")
+                ],
+                cookingMethod: "rotimatic_whole_wheat_multigrain",
+                estimatedGlycemicLoad: 18,
+                confidence: 0.93
+            )
+        ]
+
+        for var session in mockSessions {
+            try? healthGraph.ingest(&session)
         }
     }
 
