@@ -49,5 +49,7 @@
 	<string>http://adityas-macbook-pro.local:8000</string>
 	<key>VITAMockRotimaticEnabled</key>
 	<true/>
+	<key>VITAMockInstantPotEnabled</key>
+	<true/>
 </dict>
 </plist>
