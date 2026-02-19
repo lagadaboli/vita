@@ -4,16 +4,18 @@ import HealthKit
 import Foundation
 import VITACore
 
-/// Collects resting heart rate data from HealthKit with hourly aggregation.
-/// Resting HR is a CRITICAL metric — sustained elevation correlates with stress, poor recovery, and inflammation.
+/// Collects heart rate data from HealthKit.
+/// Syncs both live heart rate and resting heart rate so the dashboard has usable data
+/// even when one stream is sparse for a given user.
 public final class HeartRateCollector: @unchecked Sendable {
     private let database: VITADatabase
     private let healthGraph: HealthGraph
-    private let metricKey = "heart_rate"
+    private let heartRateMetricKey = "heart_rate"
+    private let restingHeartRateMetricKey = "resting_hr"
 
     #if canImport(HealthKit)
     private let healthStore: HKHealthStore
-    private var observerQuery: HKObserverQuery?
+    private var observerQueries: [HKObserverQuery] = []
     #endif
 
     #if canImport(HealthKit)
@@ -33,44 +35,77 @@ public final class HeartRateCollector: @unchecked Sendable {
     }
 
     #if canImport(HealthKit)
-    /// Start observing resting heart rate samples with background delivery.
+    /// Start observing both heart-rate sample streams.
     public func startObserving() throws {
-        let hrType = HKQuantityType.quantityType(forIdentifier: .heartRate)!
+        observerQueries = [
+            try makeObserverQuery(for: .heartRate),
+            try makeObserverQuery(for: .restingHeartRate),
+        ]
 
-        let observer = HKObserverQuery(sampleType: hrType, predicate: nil) { [weak self] _, completionHandler, error in
+        for query in observerQueries {
+            healthStore.execute(query)
+        }
+    }
+
+    /// Stop observing heart-rate samples.
+    public func stopObserving() {
+        for query in observerQueries {
+            healthStore.stop(query)
+        }
+        observerQueries = []
+    }
+
+    /// Fetch and process heart-rate data since last sync.
+    public func performIncrementalSync() async throws {
+        try await sync(
+            identifier: .heartRate,
+            metricType: .heartRate,
+            metricKey: heartRateMetricKey
+        )
+
+        try await sync(
+            identifier: .restingHeartRate,
+            metricType: .restingHeartRate,
+            metricKey: restingHeartRateMetricKey
+        )
+    }
+
+    private func makeObserverQuery(for identifier: HKQuantityTypeIdentifier) throws -> HKObserverQuery {
+        guard let type = HKQuantityType.quantityType(forIdentifier: identifier) else {
+            throw HealthKitError.queryFailed("Missing quantity type for \(identifier.rawValue)")
+        }
+
+        return HKObserverQuery(sampleType: type, predicate: nil) { [weak self] _, completionHandler, error in
             guard error == nil else {
                 completionHandler()
                 return
             }
+
             Task {
                 try? await self?.performIncrementalSync()
                 completionHandler()
             }
         }
-
-        healthStore.execute(observer)
-        self.observerQuery = observer
     }
 
-    /// Stop observing resting heart rate samples.
-    public func stopObserving() {
-        if let query = observerQuery {
-            healthStore.stop(query)
-            observerQuery = nil
+    private func sync(
+        identifier: HKQuantityTypeIdentifier,
+        metricType: PhysiologicalSample.MetricType,
+        metricKey: String
+    ) async throws {
+        guard let type = HKQuantityType.quantityType(forIdentifier: identifier) else {
+            throw HealthKitError.queryFailed("Missing quantity type for \(identifier.rawValue)")
         }
-    }
-
-    /// Fetch and process resting heart rate data since last sync.
-    public func performIncrementalSync() async throws {
-        let hrType = HKQuantityType.quantityType(forIdentifier: .heartRate)!
 
         let syncState = try HealthKitSyncState.load(for: metricKey, from: database)
-        let anchor = syncState?.anchorData.flatMap { try? NSKeyedUnarchiver.unarchivedObject(ofClass: HKQueryAnchor.self, from: $0) }
+        let anchor = syncState?.anchorData.flatMap {
+            try? NSKeyedUnarchiver.unarchivedObject(ofClass: HKQueryAnchor.self, from: $0)
+        }
         let predicate = incrementalPredicate(anchor: anchor)
 
         try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
             let query = HKAnchoredObjectQuery(
-                type: hrType,
+                type: type,
                 predicate: predicate,
                 anchor: anchor,
                 limit: HKObjectQueryNoLimit
@@ -85,11 +120,21 @@ public final class HeartRateCollector: @unchecked Sendable {
                     return
                 }
 
-                do {
-                    try self.processHeartRateSamples(samples ?? [], newAnchor: newAnchor)
-                    continuation.resume()
-                } catch {
-                    continuation.resume(throwing: error)
+                Task {
+                    do {
+                        var quantitySamples = (samples ?? []).compactMap { $0 as? HKQuantitySample }
+
+                        // Fallback on first sync if anchored query returned nothing.
+                        if quantitySamples.isEmpty, anchor == nil {
+                            quantitySamples = try await self.fetchSamples(type: type, predicate: predicate)
+                        }
+
+                        try self.processHeartRateSamples(quantitySamples, metricType: metricType)
+                        try self.persistAnchor(newAnchor, metricKey: metricKey)
+                        continuation.resume()
+                    } catch {
+                        continuation.resume(throwing: error)
+                    }
                 }
             }
 
@@ -97,9 +142,32 @@ public final class HeartRateCollector: @unchecked Sendable {
         }
     }
 
-    private func processHeartRateSamples(_ samples: [HKSample], newAnchor: HKQueryAnchor?) throws {
-        for sample in samples {
-            guard let quantitySample = sample as? HKQuantitySample else { continue }
+    private func fetchSamples(type: HKQuantityType, predicate: NSPredicate?) async throws -> [HKQuantitySample] {
+        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<[HKQuantitySample], Error>) in
+            let query = HKSampleQuery(
+                sampleType: type,
+                predicate: predicate,
+                limit: HKObjectQueryNoLimit,
+                sortDescriptors: [NSSortDescriptor(key: HKSampleSortIdentifierStartDate, ascending: true)]
+            ) { _, samples, error in
+                if let error {
+                    continuation.resume(throwing: HealthKitError.queryFailed(error.localizedDescription))
+                    return
+                }
+
+                let quantitySamples = (samples ?? []).compactMap { $0 as? HKQuantitySample }
+                continuation.resume(returning: quantitySamples)
+            }
+
+            healthStore.execute(query)
+        }
+    }
+
+    private func processHeartRateSamples(
+        _ samples: [HKQuantitySample],
+        metricType: PhysiologicalSample.MetricType
+    ) throws {
+        for quantitySample in samples {
             let bpm = quantitySample.quantity.doubleValue(
                 for: HKUnit.count().unitDivided(by: .minute())
             )
@@ -107,7 +175,7 @@ public final class HeartRateCollector: @unchecked Sendable {
             let isWatchSample = sampleMetadata["is_watch_sample"] == "true"
 
             var physiologicalSample = PhysiologicalSample(
-                metricType: .heartRate,
+                metricType: metricType,
                 value: bpm,
                 unit: "bpm",
                 timestamp: quantitySample.startDate,
@@ -116,16 +184,18 @@ public final class HeartRateCollector: @unchecked Sendable {
             )
             try healthGraph.ingest(&physiologicalSample)
         }
+    }
 
-        if let newAnchor {
-            let anchorData = try NSKeyedArchiver.archivedData(withRootObject: newAnchor, requiringSecureCoding: true)
-            let state = HealthKitSyncState(
-                metricType: metricKey,
-                anchorData: anchorData,
-                lastSyncDate: Date()
-            )
-            try state.save(to: database)
-        }
+    private func persistAnchor(_ anchor: HKQueryAnchor?, metricKey: String) throws {
+        guard let anchor else { return }
+
+        let anchorData = try NSKeyedArchiver.archivedData(withRootObject: anchor, requiringSecureCoding: true)
+        let state = HealthKitSyncState(
+            metricType: metricKey,
+            anchorData: anchorData,
+            lastSyncDate: Date()
+        )
+        try state.save(to: database)
     }
 
     private func healthMetadata(for sample: HKSample) -> [String: String] {

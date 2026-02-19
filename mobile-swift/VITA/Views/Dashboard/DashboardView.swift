@@ -8,54 +8,69 @@ struct DashboardView: View {
     @State private var viewModel = DashboardViewModel()
     @State private var isRefreshing = false
 
+    private var isComponentLoading: Bool {
+        !appState.isLoaded || ((appState.isHealthSyncing || isRefreshing) && !viewModel.hasAnyData)
+    }
+
     var body: some View {
         NavigationStack {
-            Group {
-                if !appState.isLoaded || ((isRefreshing || appState.isHealthSyncing) && !viewModel.hasAnyData) {
-                    LoadingStateView(
-                        title: "Loading Dashboard",
-                        message: "Fetching your latest Health and Screen Time metrics."
-                    )
-                } else {
-                    ScrollView {
-                        VStack(spacing: VITASpacing.xl) {
-                            // Health Score Ring
+            ScrollView {
+                VStack(spacing: VITASpacing.xl) {
+                    // Health Score Ring
+                    Group {
+                        if isComponentLoading {
+                            RoundedRectangle(cornerRadius: 20)
+                                .fill(VITAColors.cardBackground)
+                                .frame(height: 220)
+                                .padding(.horizontal, VITASpacing.lg)
+                                .redacted(reason: .placeholder)
+                        } else {
                             HealthScoreGauge(score: viewModel.healthScore)
                                 .padding(.top, VITASpacing.md)
-
-                            // Mini Glucose Chart
-                            MiniGlucoseChart(dataPoints: viewModel.glucoseReadings)
-
-                            // Metric Cards Row
-                            MetricCardRow(viewModel: viewModel)
-
-                            if !viewModel.hasAnyData {
-                                EmptyDataStateView(
-                                    title: "No Health Data Yet",
-                                    message: "Open Apple Health permissions for VITA, then pull to refresh."
-                                )
-                                .padding(.horizontal, VITASpacing.lg)
-                            }
-
-                            // Insights
-                            VStack(alignment: .leading, spacing: VITASpacing.md) {
-                                Text("Insights")
-                                    .font(VITATypography.title3)
-                                    .padding(.horizontal, VITASpacing.lg)
-
-                                ForEach(viewModel.insights) { insight in
-                                    InsightAlertCard(insight: insight)
-                                        .padding(.horizontal, VITASpacing.lg)
-                                }
-                            }
-
-                            // Integration Status
-                            IntegrationStatusRow()
-                                .padding(.horizontal, VITASpacing.lg)
                         }
-                        .padding(.bottom, VITASpacing.xxl)
                     }
+
+                    // Mini Glucose Chart
+                    MiniGlucoseChart(dataPoints: viewModel.glucoseReadings, isLoading: isComponentLoading)
+
+                    // Metric Cards Row
+                    MetricCardRow(viewModel: viewModel, isLoading: isComponentLoading)
+
+                    if !viewModel.hasAnyData && !isComponentLoading {
+                        EmptyDataStateView(
+                            title: "No Health Data Yet",
+                            message: "Open Apple Health permissions for VITA, then pull to refresh."
+                        )
+                        .padding(.horizontal, VITASpacing.lg)
+                    }
+
+                    // Insights
+                    VStack(alignment: .leading, spacing: VITASpacing.md) {
+                        Text("Insights")
+                            .font(VITATypography.title3)
+                            .padding(.horizontal, VITASpacing.lg)
+
+                        if isComponentLoading {
+                            ForEach(0..<2, id: \.self) { _ in
+                                RoundedRectangle(cornerRadius: VITASpacing.cardCornerRadius)
+                                    .fill(VITAColors.cardBackground)
+                                    .frame(height: 110)
+                                    .padding(.horizontal, VITASpacing.lg)
+                                    .redacted(reason: .placeholder)
+                            }
+                        } else {
+                            ForEach(viewModel.insights) { insight in
+                                InsightAlertCard(insight: insight)
+                                    .padding(.horizontal, VITASpacing.lg)
+                            }
+                        }
+                    }
+
+                    // Integration Status
+                    IntegrationStatusRow()
+                        .padding(.horizontal, VITASpacing.lg)
                 }
+                .padding(.bottom, VITASpacing.xxl)
             }
             .background(VITAColors.background)
             .navigationTitle("VITA")
@@ -66,7 +81,11 @@ struct DashboardView: View {
                 await refreshDashboard()
             }
             .navigationDestination(for: DashboardMetric.self) { metric in
-                MetricHistoryDetailView(metric: metric, viewModel: viewModel)
+                MetricHistoryDetailView(
+                    metric: metric,
+                    viewModel: viewModel,
+                    isLoading: appState.isHealthSyncing
+                )
             }
         }
     }
@@ -84,6 +103,7 @@ struct DashboardView: View {
 struct MetricHistoryDetailView: View {
     let metric: DashboardMetric
     let viewModel: DashboardViewModel
+    let isLoading: Bool
 
     private var points: [DashboardViewModel.MetricHistoryPoint] {
         viewModel.history(for: metric)
@@ -144,7 +164,12 @@ struct MetricHistoryDetailView: View {
                     .foregroundStyle(VITAColors.textTertiary)
             }
 
-            if points.isEmpty {
+            if isLoading && points.isEmpty {
+                RoundedRectangle(cornerRadius: VITASpacing.cardCornerRadius)
+                    .fill(VITAColors.cardBackground)
+                    .frame(height: 260)
+                    .redacted(reason: .placeholder)
+            } else if points.isEmpty {
                 Text("No historical data available yet.")
                     .font(VITATypography.body)
                     .foregroundStyle(VITAColors.textSecondary)

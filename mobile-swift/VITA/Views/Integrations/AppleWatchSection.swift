@@ -3,6 +3,7 @@ import VITADesignSystem
 
 struct AppleWatchSection: View {
     let viewModel: IntegrationsViewModel
+    let isLoading: Bool
 
     var body: some View {
         VStack(alignment: .leading, spacing: VITASpacing.md) {
@@ -46,14 +47,27 @@ struct AppleWatchSection: View {
                 Divider()
 
                 HStack(spacing: VITASpacing.xl) {
-                    WatchMetricItem(label: "HRV", value: "\(Int(viewModel.watchHRV))", unit: "ms")
-                    WatchMetricItem(label: "HR", value: "\(Int(viewModel.watchHR))", unit: "bpm")
-                    WatchMetricItem(label: "Steps", value: "\(viewModel.watchSteps)", unit: "")
+                    WatchMetricItem(
+                        label: "HRV",
+                        value: isLoading ? "--" : "\(Int(viewModel.watchHRV))",
+                        unit: "ms"
+                    )
+                    WatchMetricItem(
+                        label: "HR",
+                        value: isLoading ? "--" : "\(Int(viewModel.watchHR))",
+                        unit: "bpm"
+                    )
+                    WatchMetricItem(
+                        label: "Steps",
+                        value: isLoading ? "--" : "\(viewModel.watchSteps)",
+                        unit: ""
+                    )
                 }
             }
             .padding(VITASpacing.cardPadding)
             .background(VITAColors.cardBackground)
             .clipShape(RoundedRectangle(cornerRadius: VITASpacing.cardCornerRadius))
+            .redacted(reason: isLoading ? .placeholder : [])
         }
     }
 }

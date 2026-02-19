@@ -9,28 +9,37 @@ struct IntegrationsView: View {
 
     var body: some View {
         NavigationStack {
-            Group {
-                if !appState.isLoaded || isRefreshing {
-                    LoadingStateView(
-                        title: "Loading Integrations",
-                        message: "Syncing Apple Watch, Screen Time, and connected services."
-                    )
-                } else {
-                    ScrollView {
-                        VStack(spacing: VITASpacing.xl) {
-                            AppleWatchSection(viewModel: viewModel)
-                            ScreenTimeSection(viewModel: viewModel)
-                            DoorDashSection(viewModel: viewModel)
-                            InstacartSection(viewModel: viewModel)
-                            RotimaticSection(viewModel: viewModel)
-                            InstantPotSection(viewModel: viewModel)
-                            WeighingMachineSection(viewModel: viewModel)
-                            EnvironmentSection(viewModel: viewModel)
+            ScrollView {
+                VStack(spacing: VITASpacing.xl) {
+                    if isRefreshing || appState.isHealthSyncing || !appState.isLoaded {
+                        HStack(spacing: VITASpacing.sm) {
+                            ProgressView()
+                                .tint(VITAColors.teal)
+                            Text("Refreshing integrations...")
+                                .font(VITATypography.caption)
+                                .foregroundStyle(VITAColors.textSecondary)
                         }
-                        .padding(.horizontal, VITASpacing.lg)
-                        .padding(.bottom, VITASpacing.xxl)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.horizontal, VITASpacing.xs)
                     }
+
+                    AppleWatchSection(
+                        viewModel: viewModel,
+                        isLoading: isRefreshing || appState.isHealthSyncing || !appState.isLoaded
+                    )
+                    ScreenTimeSection(
+                        viewModel: viewModel,
+                        isLoading: isRefreshing || appState.isHealthSyncing || !appState.isLoaded
+                    )
+                    DoorDashSection(viewModel: viewModel)
+                    InstacartSection(viewModel: viewModel)
+                    RotimaticSection(viewModel: viewModel)
+                    InstantPotSection(viewModel: viewModel)
+                    WeighingMachineSection(viewModel: viewModel)
+                    EnvironmentSection(viewModel: viewModel)
                 }
+                .padding(.horizontal, VITASpacing.lg)
+                .padding(.bottom, VITASpacing.xxl)
             }
             .background(VITAColors.background)
             .navigationTitle("Integrations")
@@ -62,6 +71,7 @@ struct IntegrationsView: View {
 
 struct ScreenTimeSection: View {
     let viewModel: IntegrationsViewModel
+    let isLoading: Bool
 
     var body: some View {
         VStack(alignment: .leading, spacing: VITASpacing.md) {
@@ -77,7 +87,12 @@ struct ScreenTimeSection: View {
                     .foregroundStyle(VITAColors.textSecondary)
             }
 
-            if viewModel.zombieScrollSessions.isEmpty {
+            if isLoading && viewModel.zombieScrollSessions.isEmpty {
+                RoundedRectangle(cornerRadius: VITASpacing.cardCornerRadius)
+                    .fill(VITAColors.cardBackground)
+                    .frame(height: 120)
+                    .redacted(reason: .placeholder)
+            } else if viewModel.zombieScrollSessions.isEmpty {
                 EmptyDataStateView(
                     title: "No Screen Time Alerts Yet",
                     message: viewModel.screenTimeStatusMessage.isEmpty

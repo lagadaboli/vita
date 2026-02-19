@@ -10,13 +10,14 @@ struct QueryInputView: View {
             Divider()
 
             HStack(spacing: VITASpacing.md) {
-                TextField("Why am I tired?", text: $viewModel.queryText)
+                TextField(appState.isLoaded ? "Why am I tired?" : "Loading your health context...", text: $viewModel.queryText)
                     .font(VITATypography.body)
                     .textFieldStyle(.plain)
                     .submitLabel(.send)
                     .onSubmit {
                         Task { await viewModel.query(appState: appState) }
                     }
+                    .disabled(!appState.isLoaded)
 
                 Button {
                     Task { await viewModel.query(appState: appState) }
@@ -32,7 +33,7 @@ struct QueryInputView: View {
                             )
                     }
                 }
-                .disabled(viewModel.queryText.isEmpty || viewModel.isQuerying)
+                .disabled(!appState.isLoaded || viewModel.queryText.isEmpty || viewModel.isQuerying)
             }
             .padding(.horizontal, VITASpacing.lg)
             .padding(.vertical, VITASpacing.md)

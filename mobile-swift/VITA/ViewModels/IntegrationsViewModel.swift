@@ -121,7 +121,7 @@ final class IntegrationsViewModel {
             screenTimeStatusMessage = "Screen Time monitoring is active."
         case .unavailable(let reason):
             isScreenTimeAuthorized = false
-            screenTimeStatusMessage = "Screen Time access unavailable: \(reason)"
+            screenTimeStatusMessage = "Screen Time access unavailable: \(reason). Check Screen Time + Family Controls permissions."
         case .notConfigured:
             isScreenTimeAuthorized = false
             screenTimeStatusMessage = "Screen Time monitoring is not configured."

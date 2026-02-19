@@ -8,31 +8,30 @@ struct AskVITAView: View {
 
     var body: some View {
         NavigationStack {
-            Group {
-                if !appState.isLoaded {
-                    LoadingStateView(
-                        title: "Preparing Ask VITA",
-                        message: "Waiting for your health data to finish syncing."
-                    )
-                } else {
-                    ZStack(alignment: .bottom) {
-                        ScrollView {
-                            VStack(spacing: VITASpacing.xl) {
-                                if !viewModel.hasQueried {
-                                    emptyState
-                                } else {
-                                    resultsView
-                                }
-                            }
-                            .padding(.bottom, 100) // Space for input bar
+            ZStack(alignment: .bottom) {
+                ScrollView {
+                    VStack(spacing: VITASpacing.xl) {
+                        if !appState.isLoaded {
+                            EmptyDataStateView(
+                                title: "Preparing Ask VITA",
+                                message: "Health data is still syncing. You can type now and send once sync completes."
+                            )
+                            .padding(.horizontal, VITASpacing.lg)
                         }
 
-                        QueryInputView(viewModel: viewModel, appState: appState)
+                        if !viewModel.hasQueried {
+                            emptyState
+                        } else {
+                            resultsView
+                        }
                     }
-                    .background(VITAColors.background)
-                    .navigationTitle("Ask VITA")
                 }
+                .padding(.bottom, 100) // Space for input bar
+
+                QueryInputView(viewModel: viewModel, appState: appState)
             }
+            .background(VITAColors.background)
+            .navigationTitle("Ask VITA")
         }
     }
 
