@@ -39,10 +39,6 @@ struct TimelineView: View {
             }
             .background(VITAColors.background)
             .navigationTitle("Timeline")
-            .task(id: appState.isLoaded) {
-                guard appState.isLoaded else { return }
-                await refreshTimeline(force: false)
-            }
             .onAppear {
                 viewModel.load(from: appState)
             }
