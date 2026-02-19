@@ -152,7 +152,7 @@ final class AppState {
             backendURL: Self.backendURL
         )
         self.consumptionBridge = bridge
-        try? await bridge.fetchRecentOrders(from: .doordash)
+        _ = try? await bridge.fetchRecentOrders(from: .doordash)
 
         // Background-load the on-device LLM (non-blocking)
         #if canImport(MLXLLM) && canImport(Metal)
