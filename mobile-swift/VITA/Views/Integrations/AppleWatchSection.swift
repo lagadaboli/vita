@@ -14,7 +14,7 @@ struct AppleWatchSection: View {
                 Text("Apple Watch")
                     .font(VITATypography.title3)
                 Spacer()
-                ConnectionStatusBadge(name: "", icon: "applewatch", status: viewModel.watchConnectionStatus)
+                ConnectionStatusBadge(name: "", icon: "applewatch", status: .connected)
             }
 
             if isLoading {
@@ -22,29 +22,13 @@ struct AppleWatchSection: View {
             } else {
                 VStack(spacing: VITASpacing.md) {
                     HStack {
-                        Text("Connection")
-                            .font(VITATypography.caption)
-                            .foregroundStyle(VITAColors.textSecondary)
-                        Spacer()
-                        Text(viewModel.watchConnectionDetail)
-                            .font(VITATypography.caption)
-                            .foregroundStyle(VITAColors.textTertiary)
-                    }
-
-                    HStack {
                         Text("Last sync")
                             .font(VITATypography.caption)
                             .foregroundStyle(VITAColors.textSecondary)
                         Spacer()
-                        if viewModel.watchSyncDate == Date.distantPast {
-                            Text("No sync yet")
-                                .font(VITATypography.caption)
-                                .foregroundStyle(VITAColors.textTertiary)
-                        } else {
-                            Text(viewModel.watchSyncDate, style: .relative)
-                                .font(VITATypography.caption)
-                                .foregroundStyle(VITAColors.textTertiary)
-                        }
+                        Text(viewModel.watchSyncDate, style: .relative)
+                            .font(VITATypography.caption)
+                            .foregroundStyle(VITAColors.textTertiary)
                     }
 
                     Divider()
