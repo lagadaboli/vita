@@ -140,7 +140,12 @@ final class AppState {
             loadSampleData()
         }
 
-        // 4. Consumption Bridge — pull DoorDash (and other delivery) orders from backend.
+        // 4. WatchConnectivity — activate session so nudges queue immediately on launch.
+        #if canImport(WatchConnectivity)
+        _ = WatchConnectivityBridge.shared
+        #endif
+
+        // 5. Consumption Bridge — pull DoorDash (and other delivery) orders from backend.
         let bridge = ConsumptionBridge(
             database: database,
             healthGraph: healthGraph,

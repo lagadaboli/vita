@@ -6,11 +6,11 @@ import WatchConnectivity
 
 @main
 struct WatchVITAApp: App {
-    @State private var latestNudge: WatchNudgePayload?
+    @State private var sessionManager = WatchSessionManager()
 
     var body: some Scene {
         WindowGroup {
-            if let nudge = latestNudge {
+            if let nudge = sessionManager.latestNudge {
                 WatchNudgeView(nudge: nudge)
             } else {
                 VStack(spacing: 12) {
