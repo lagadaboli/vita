@@ -47,5 +47,7 @@
 	</array>
 	<key>VITABackendURL</key>
 	<string>http://adityas-macbook-pro.local:8000</string>
+	<key>VITAMockRotimaticEnabled</key>
+	<true/>
 </dict>
 </plist>
