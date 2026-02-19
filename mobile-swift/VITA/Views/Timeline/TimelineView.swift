@@ -18,10 +18,7 @@ struct TimelineView: View {
                     LazyVStack(spacing: VITASpacing.md) {
                         if isRefreshing || appState.isHealthSyncing || !appState.isLoaded {
                             ForEach(0..<5, id: \.self) { _ in
-                                RoundedRectangle(cornerRadius: VITASpacing.cardCornerRadius)
-                                    .fill(VITAColors.cardBackground)
-                                    .frame(height: 92)
-                                    .redacted(reason: .placeholder)
+                                SkeletonCard(lines: [120, 180, 90], lineHeight: 11)
                             }
                         } else if viewModel.filteredEvents.isEmpty {
                             EmptyDataStateView(

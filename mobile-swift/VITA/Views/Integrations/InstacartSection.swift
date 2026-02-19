@@ -3,6 +3,7 @@ import VITADesignSystem
 
 struct InstacartSection: View {
     let viewModel: IntegrationsViewModel
+    let isLoading: Bool
 
     var body: some View {
         VStack(alignment: .leading, spacing: VITASpacing.md) {
@@ -18,33 +19,42 @@ struct InstacartSection: View {
                     .foregroundStyle(VITAColors.textSecondary)
             }
 
-            // Order Cards
-            ForEach(viewModel.instacartOrders) { order in
-                VStack(alignment: .leading, spacing: VITASpacing.sm) {
-                    HStack {
-                        Text(order.label)
-                            .font(VITATypography.headline)
-                        Spacer()
-                        Text(order.timestamp, style: .date)
-                            .font(VITATypography.caption)
-                            .foregroundStyle(VITAColors.textTertiary)
-                    }
-
-                    // Item list
-                    Text(order.items.map(\.name).joined(separator: ", "))
-                        .font(VITATypography.caption)
-                        .foregroundStyle(VITAColors.textSecondary)
-                        .lineLimit(2)
-
-                    HStack {
-                        GLBar(glycemicLoad: order.totalGL)
-                        Spacer()
-                        HealthScoreBadge(score: order.healthScore)
-                    }
+            if isLoading {
+                ForEach(0..<2, id: \.self) { _ in
+                    SkeletonCard(lines: [120, 240, 160], lineHeight: 12)
                 }
-                .padding(VITASpacing.cardPadding)
-                .background(VITAColors.cardBackground)
-                .clipShape(RoundedRectangle(cornerRadius: VITASpacing.cardCornerRadius))
+            } else if viewModel.instacartOrders.isEmpty {
+                EmptyDataStateView(
+                    title: "No Instacart Orders Yet",
+                    message: "Orders will appear here once Instacart data syncs."
+                )
+            } else {
+                ForEach(viewModel.instacartOrders) { order in
+                    VStack(alignment: .leading, spacing: VITASpacing.sm) {
+                        HStack {
+                            Text(order.label)
+                                .font(VITATypography.headline)
+                            Spacer()
+                            Text(order.timestamp, style: .date)
+                                .font(VITATypography.caption)
+                                .foregroundStyle(VITAColors.textTertiary)
+                        }
+
+                        Text(order.items.map(\.name).joined(separator: ", "))
+                            .font(VITATypography.caption)
+                            .foregroundStyle(VITAColors.textSecondary)
+                            .lineLimit(2)
+
+                        HStack {
+                            GLBar(glycemicLoad: order.totalGL)
+                            Spacer()
+                            HealthScoreBadge(score: order.healthScore)
+                        }
+                    }
+                    .padding(VITASpacing.cardPadding)
+                    .background(VITAColors.cardBackground)
+                    .clipShape(RoundedRectangle(cornerRadius: VITASpacing.cardCornerRadius))
+                }
             }
         }
     }

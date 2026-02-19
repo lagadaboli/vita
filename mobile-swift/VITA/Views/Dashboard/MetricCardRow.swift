@@ -9,15 +9,8 @@ struct MetricCardRow: View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: VITASpacing.md) {
                 if isLoading {
-                    ForEach(DashboardMetric.allCases) { metric in
-                        MetricCard(
-                            title: metric.title,
-                            value: "--",
-                            unit: metric.unit,
-                            trend: .stable,
-                            color: VITAColors.textTertiary
-                        )
-                        .redacted(reason: .placeholder)
+                    ForEach(0..<DashboardMetric.allCases.count, id: \.self) { _ in
+                        MetricCardSkeleton()
                     }
                 } else {
                     NavigationLink(value: DashboardMetric.hrv) {
@@ -107,5 +100,24 @@ struct MetricCardRow: View {
             return String(format: "%.1fk", Double(steps) / 1000.0)
         }
         return "\(steps)"
+    }
+}
+
+private struct MetricCardSkeleton: View {
+    var body: some View {
+        VStack(alignment: .leading, spacing: VITASpacing.sm) {
+            ShimmerSkeleton(width: 70, height: 10, cornerRadius: 6)
+
+            HStack(alignment: .firstTextBaseline, spacing: VITASpacing.xs) {
+                ShimmerSkeleton(width: 52, height: 26, cornerRadius: 8)
+                ShimmerSkeleton(width: 24, height: 10, cornerRadius: 6)
+            }
+
+            ShimmerSkeleton(width: 64, height: 10, cornerRadius: 6)
+        }
+        .padding(VITASpacing.cardPadding)
+        .frame(width: 140, alignment: .leading)
+        .background(VITAColors.cardBackground)
+        .clipShape(RoundedRectangle(cornerRadius: VITASpacing.cardCornerRadius))
     }
 }

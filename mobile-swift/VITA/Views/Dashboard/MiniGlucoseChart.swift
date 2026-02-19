@@ -25,10 +25,12 @@ struct MiniGlucoseChart: View {
             }
 
             if isLoading {
-                RoundedRectangle(cornerRadius: VITASpacing.cardCornerRadius)
-                    .fill(VITAColors.cardBackground)
-                    .frame(height: 160)
-                    .redacted(reason: .placeholder)
+                VStack(alignment: .leading, spacing: VITASpacing.sm) {
+                    ShimmerSkeleton(width: 86, height: 10, cornerRadius: 6)
+                    ShimmerSkeleton(width: 140, height: 10, cornerRadius: 6)
+                    ShimmerSkeleton(height: 120, cornerRadius: 14)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
             } else if dataPoints.isEmpty {
                 Text("Waiting for glucose samples...")
                     .font(VITATypography.callout)

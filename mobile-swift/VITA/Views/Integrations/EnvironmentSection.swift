@@ -3,6 +3,7 @@ import VITADesignSystem
 
 struct EnvironmentSection: View {
     let viewModel: IntegrationsViewModel
+    let isLoading: Bool
 
     var body: some View {
         VStack(alignment: .leading, spacing: VITASpacing.md) {
@@ -18,8 +19,9 @@ struct EnvironmentSection: View {
                 }
             }
 
-            if let current = viewModel.environmentReadings.last {
-                // Current conditions grid
+            if isLoading {
+                SkeletonCard(lines: [120, 220, 180], lineHeight: 12)
+            } else if let current = viewModel.environmentReadings.last {
                 VStack(spacing: VITASpacing.md) {
                     HStack(spacing: VITASpacing.md) {
                         ConditionItem(
@@ -58,7 +60,6 @@ struct EnvironmentSection: View {
                         Spacer()
                     }
 
-                    // Health impact
                     if current.healthImpact != "No significant health risks" {
                         HStack(spacing: VITASpacing.sm) {
                             Image(systemName: "exclamationmark.triangle")
@@ -73,29 +74,33 @@ struct EnvironmentSection: View {
                 .padding(VITASpacing.cardPadding)
                 .background(VITAColors.cardBackground)
                 .clipShape(RoundedRectangle(cornerRadius: VITASpacing.cardCornerRadius))
-            }
 
-            // 7-day history
-            ForEach(viewModel.environmentReadings.dropLast().suffix(5).reversed()) { reading in
-                HStack {
-                    Text(reading.timestamp, style: .date)
-                        .font(VITATypography.caption)
-                        .foregroundStyle(VITAColors.textSecondary)
-                    Spacer()
-                    HStack(spacing: VITASpacing.md) {
-                        Text("\(Int(reading.temperatureCelsius))\u{00B0}")
+                ForEach(viewModel.environmentReadings.dropLast().suffix(5).reversed()) { reading in
+                    HStack {
+                        Text(reading.timestamp, style: .date)
                             .font(VITATypography.caption)
-                            .foregroundStyle(tempColor(reading.temperatureCelsius))
-                        Text("AQI \(reading.aqiUS)")
-                            .font(VITATypography.caption)
-                            .foregroundStyle(aqiColor(reading.aqiUS))
-                        Text("P\(reading.pollenIndex)")
-                            .font(VITATypography.caption)
-                            .foregroundStyle(pollenColor(reading.pollenIndex))
+                            .foregroundStyle(VITAColors.textSecondary)
+                        Spacer()
+                        HStack(spacing: VITASpacing.md) {
+                            Text("\(Int(reading.temperatureCelsius))\u{00B0}")
+                                .font(VITATypography.caption)
+                                .foregroundStyle(tempColor(reading.temperatureCelsius))
+                            Text("AQI \(reading.aqiUS)")
+                                .font(VITATypography.caption)
+                                .foregroundStyle(aqiColor(reading.aqiUS))
+                            Text("P\(reading.pollenIndex)")
+                                .font(VITATypography.caption)
+                                .foregroundStyle(pollenColor(reading.pollenIndex))
+                        }
                     }
+                    .padding(.horizontal, VITASpacing.cardPadding)
+                    .padding(.vertical, VITASpacing.xs)
                 }
-                .padding(.horizontal, VITASpacing.cardPadding)
-                .padding(.vertical, VITASpacing.xs)
+            } else {
+                EmptyDataStateView(
+                    title: "No Environment Data Yet",
+                    message: "Location and weather sync data will appear here."
+                )
             }
         }
     }

@@ -7,36 +7,29 @@ struct IntegrationsView: View {
     @State private var isRefreshing = false
     private let refreshTimer = Timer.publish(every: 60, on: .main, in: .common).autoconnect()
 
+    private var isSectionLoading: Bool {
+        isRefreshing || appState.isHealthSyncing || !appState.isLoaded
+    }
+
     var body: some View {
         NavigationStack {
             ScrollView {
                 VStack(spacing: VITASpacing.xl) {
-                    if isRefreshing || appState.isHealthSyncing || !appState.isLoaded {
-                        HStack(spacing: VITASpacing.sm) {
-                            ProgressView()
-                                .tint(VITAColors.teal)
-                            Text("Refreshing integrations...")
-                                .font(VITATypography.caption)
-                                .foregroundStyle(VITAColors.textSecondary)
-                        }
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(.horizontal, VITASpacing.xs)
-                    }
-
                     AppleWatchSection(
                         viewModel: viewModel,
-                        isLoading: isRefreshing || appState.isHealthSyncing || !appState.isLoaded
+                        isLoading: isSectionLoading
                     )
                     ScreenTimeSection(
                         viewModel: viewModel,
-                        isLoading: isRefreshing || appState.isHealthSyncing || !appState.isLoaded
+                        appState: appState,
+                        isLoading: isSectionLoading
                     )
-                    DoorDashSection(viewModel: viewModel)
-                    InstacartSection(viewModel: viewModel)
-                    RotimaticSection(viewModel: viewModel)
-                    InstantPotSection(viewModel: viewModel)
-                    WeighingMachineSection(viewModel: viewModel)
-                    EnvironmentSection(viewModel: viewModel)
+                    DoorDashSection(viewModel: viewModel, isLoading: isSectionLoading)
+                    InstacartSection(viewModel: viewModel, isLoading: isSectionLoading)
+                    RotimaticSection(viewModel: viewModel, isLoading: isSectionLoading)
+                    InstantPotSection(viewModel: viewModel, isLoading: isSectionLoading)
+                    WeighingMachineSection(viewModel: viewModel, isLoading: isSectionLoading)
+                    EnvironmentSection(viewModel: viewModel, isLoading: isSectionLoading)
                 }
                 .padding(.horizontal, VITASpacing.lg)
                 .padding(.bottom, VITASpacing.xxl)
@@ -71,7 +64,27 @@ struct IntegrationsView: View {
 
 struct ScreenTimeSection: View {
     let viewModel: IntegrationsViewModel
+    let appState: AppState
     let isLoading: Bool
+    @State private var isRequestingPermission = false
+
+    private var isAuthorized: Bool {
+        if case .authorized = appState.screenTimeStatus {
+            return true
+        }
+        return false
+    }
+
+    private var statusMessage: String {
+        switch appState.screenTimeStatus {
+        case .authorized:
+            return "Screen Time monitoring is active."
+        case .unavailable(let reason):
+            return "Screen Time access unavailable: \(reason). Check Screen Time + Family Controls permissions."
+        case .notConfigured:
+            return "Screen Time monitoring is not configured."
+        }
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: VITASpacing.md) {
@@ -88,16 +101,43 @@ struct ScreenTimeSection: View {
             }
 
             if isLoading && viewModel.zombieScrollSessions.isEmpty {
-                RoundedRectangle(cornerRadius: VITASpacing.cardCornerRadius)
-                    .fill(VITAColors.cardBackground)
-                    .frame(height: 120)
-                    .redacted(reason: .placeholder)
+                SkeletonCard(lines: [120, 210, 140], lineHeight: 12)
+            } else if !isAuthorized {
+                VStack(alignment: .leading, spacing: VITASpacing.sm) {
+                    EmptyDataStateView(
+                        title: "Screen Time Access Needed",
+                        message: statusMessage
+                    )
+                    Button {
+                        Task {
+                            isRequestingPermission = true
+                            defer { isRequestingPermission = false }
+                            await appState.requestScreenTimeAuthorization()
+                        }
+                    } label: {
+                        HStack(spacing: VITASpacing.sm) {
+                            if isRequestingPermission {
+                                ProgressView()
+                                    .tint(VITAColors.teal)
+                            } else {
+                                Image(systemName: "lock.shield")
+                            }
+                            Text(isRequestingPermission ? "Requesting Permission..." : "Enable Screen Time Access")
+                                .font(VITATypography.headline)
+                        }
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, VITASpacing.sm)
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .tint(VITAColors.teal)
+                    .disabled(isRequestingPermission)
+                }
             } else if viewModel.zombieScrollSessions.isEmpty {
                 EmptyDataStateView(
                     title: "No Screen Time Alerts Yet",
-                    message: viewModel.screenTimeStatusMessage.isEmpty
+                    message: statusMessage.isEmpty
                         ? "No zombie-scrolling events have been recorded yet."
-                        : viewModel.screenTimeStatusMessage
+                        : statusMessage
                 )
             } else {
                 ForEach(viewModel.zombieScrollSessions) { session in

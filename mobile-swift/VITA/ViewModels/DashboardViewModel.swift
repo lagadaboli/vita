@@ -104,9 +104,8 @@ final class DashboardViewModel {
         let calendar = Calendar.current
         let now = Date()
         let sixHoursAgo = calendar.date(byAdding: .hour, value: -6, to: now) ?? now
-        let dayAgo = calendar.date(byAdding: .day, value: -1, to: now) ?? now
-        let weekAgo = calendar.date(byAdding: .day, value: -7, to: now) ?? now
-        let twoWeeksAgo = calendar.date(byAdding: .day, value: -14, to: now) ?? now
+        let monthAgo = calendar.date(byAdding: .month, value: -1, to: now) ?? now
+        let yearAgo = calendar.date(byAdding: .year, value: -1, to: now) ?? now
         let dayStart = calendar.startOfDay(for: now)
 
         // Load glucose data (live values + chart history).
@@ -126,7 +125,7 @@ final class DashboardViewModel {
             glucoseTrend = .stable
         }
 
-        if let readings = try? appState.healthGraph.queryGlucose(from: dayAgo, to: now) {
+        if let readings = try? appState.healthGraph.queryGlucose(from: monthAgo, to: now) {
             glucoseHistory = readings.map {
                 MetricHistoryPoint(timestamp: $0.timestamp, value: $0.glucoseMgDL)
             }
@@ -135,16 +134,16 @@ final class DashboardViewModel {
         }
 
         // Load HRV (prefer watch-source samples when available).
-        if let samples = try? appState.healthGraph.querySamples(type: .hrvSDNN, from: weekAgo, to: now) {
-            let preferredSamples = preferredWatchSamples(from: samples)
-            hrvHistory = preferredSamples.map {
+        if let samples = try? appState.healthGraph.querySamples(type: .hrvSDNN, from: yearAgo, to: now) {
+            let sortedSamples = samples.sorted(by: { $0.timestamp < $1.timestamp })
+            hrvHistory = sortedSamples.map {
                 MetricHistoryPoint(timestamp: $0.timestamp, value: $0.value)
             }
 
-            if let last = preferredSamples.last {
+            if let last = latestPreferredSample(from: sortedSamples) {
                 currentHRV = last.value
-                if preferredSamples.count >= 2 {
-                    let prev = preferredSamples[preferredSamples.count - 2].value
+                if sortedSamples.count >= 2 {
+                    let prev = sortedSamples[sortedSamples.count - 2].value
                     hrvTrend = last.value > prev + 3 ? .up : (last.value < prev - 3 ? .down : .stable)
                 }
             } else {
@@ -158,22 +157,22 @@ final class DashboardViewModel {
         }
 
         // Load heart rate with fallback to resting heart rate.
-        if let samples = fetchHeartRateSamples(from: appState, from: weekAgo, to: now) {
-            let preferredSamples = preferredWatchSamples(from: samples)
-            heartRateHistory = preferredSamples.map {
+        if let samples = fetchHeartRateSamples(from: appState, from: yearAgo, to: now) {
+            let sortedSamples = samples.sorted(by: { $0.timestamp < $1.timestamp })
+            heartRateHistory = sortedSamples.map {
                 MetricHistoryPoint(timestamp: $0.timestamp, value: $0.value)
             }
-            currentHR = preferredSamples.last?.value ?? 0
+            currentHR = latestPreferredSample(from: sortedSamples)?.value ?? 0
         } else {
             heartRateHistory = []
             currentHR = 0
         }
 
         // Load sleep (sum asleep stages, not just one sample).
-        let sleepLookbackStart = calendar.date(byAdding: .day, value: -8, to: now) ?? weekAgo
+        let sleepLookbackStart = calendar.date(byAdding: .day, value: -366, to: now) ?? yearAgo
         if let samples = try? appState.healthGraph.querySamples(type: .sleepAnalysis, from: sleepLookbackStart, to: now) {
-            let preferredSamples = preferredWatchSamples(from: samples)
-            sleepHistory = buildDailySleepHistory(from: preferredSamples, from: weekAgo, to: now)
+            let sortedSamples = samples.sorted(by: { $0.timestamp < $1.timestamp })
+            sleepHistory = buildDailySleepHistory(from: sortedSamples, from: yearAgo, to: now)
             sleepHours = sleepHistory.last(where: { $0.value > 0 })?.value ?? 0
         } else {
             sleepHistory = []
@@ -181,18 +180,18 @@ final class DashboardViewModel {
         }
 
         // Load steps (sum all today's samples to match Apple Health totals).
-        if let samples = try? appState.healthGraph.querySamples(type: .stepCount, from: weekAgo, to: now) {
-            let preferredSamples = preferredWatchSamples(from: samples)
-            let todaySamples = preferredSamples.filter { $0.timestamp >= dayStart }
+        if let samples = try? appState.healthGraph.querySamples(type: .stepCount, from: yearAgo, to: now) {
+            let sortedSamples = samples.sorted(by: { $0.timestamp < $1.timestamp })
+            let todaySamples = sortedSamples.filter { $0.timestamp >= dayStart }
             steps = Int(todaySamples.reduce(0.0) { $0 + $1.value }.rounded())
-            stepsHistory = buildDailyTotalHistory(from: preferredSamples, from: weekAgo, to: now)
+            stepsHistory = buildDailyTotalHistory(from: sortedSamples, from: yearAgo, to: now)
         } else {
             steps = 0
             stepsHistory = []
         }
 
         // Load dopamine debt from behavior data.
-        if let behaviors = try? appState.healthGraph.queryBehaviors(from: weekAgo, to: now), !behaviors.isEmpty {
+        if let behaviors = try? appState.healthGraph.queryBehaviors(from: yearAgo, to: now), !behaviors.isEmpty {
             let sortedBehaviors = behaviors.sorted(by: { $0.timestamp < $1.timestamp })
             if let latest = sortedBehaviors.last {
                 dopamineDebt = latest.dopamineDebtScore ?? BehavioralEvent.computeDopamineDebt(
@@ -202,14 +201,14 @@ final class DashboardViewModel {
                     lateNightPenalty: isLateNight(latest.timestamp) ? 1.0 : 0.0
                 )
             }
-            dopamineDebtHistory = buildDailyDopamineHistory(from: sortedBehaviors, from: weekAgo, to: now)
+            dopamineDebtHistory = buildDailyDopamineHistory(from: sortedBehaviors, from: yearAgo, to: now)
         } else {
             dopamineDebt = 0
             dopamineDebtHistory = []
         }
 
         // Load weight.
-        if let weightSamples = try? appState.healthGraph.querySamples(type: .bodyWeight, from: twoWeeksAgo, to: now) {
+        if let weightSamples = try? appState.healthGraph.querySamples(type: .bodyWeight, from: yearAgo, to: now) {
             weightHistory = weightSamples.map {
                 MetricHistoryPoint(timestamp: $0.timestamp, value: $0.value)
             }
@@ -416,9 +415,18 @@ final class DashboardViewModel {
         }
     }
 
-    private func preferredWatchSamples(from samples: [PhysiologicalSample]) -> [PhysiologicalSample] {
+    private func latestPreferredSample(from samples: [PhysiologicalSample]) -> PhysiologicalSample? {
+        guard let latest = samples.max(by: { $0.timestamp < $1.timestamp }) else { return nil }
         let watchSamples = samples.filter(isWatchSample)
-        return watchSamples.isEmpty ? samples : watchSamples
+        guard let latestWatch = watchSamples.max(by: { $0.timestamp < $1.timestamp }) else {
+            return latest
+        }
+
+        // Prefer watch data when it is not stale relative to overall latest data.
+        if latest.timestamp.timeIntervalSince(latestWatch.timestamp) > 12 * 60 * 60 {
+            return latest
+        }
+        return latestWatch
     }
 
     private func isWatchSample(_ sample: PhysiologicalSample) -> Bool {

@@ -423,6 +423,23 @@ final class AppState {
         ingestPendingScreenTimeData()
     }
 
+    func requestScreenTimeAuthorization() async {
+        guard let tracker = screenTimeTracker else { return }
+        #if os(iOS)
+        do {
+            try await tracker.requestAuthorization()
+            try tracker.startMonitoring()
+            screenTimeStatus = .authorized
+            ingestPendingScreenTimeData()
+        } catch {
+            screenTimeStatus = .unavailable(error.localizedDescription)
+            #if DEBUG
+            print("[AppState] Screen Time authorization failed: \(error.localizedDescription)")
+            #endif
+        }
+        #endif
+    }
+
     private func ingestPendingScreenTimeData() {
         guard let tracker = screenTimeTracker else { return }
         do {
