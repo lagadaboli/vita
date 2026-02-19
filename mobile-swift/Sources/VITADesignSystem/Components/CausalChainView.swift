@@ -25,9 +25,10 @@ public struct CausalChainView: View {
     }
 
     public var body: some View {
-        VStack(spacing: 0) {
+        VStack(alignment: .leading, spacing: 0) {
             ForEach(Array(nodes.enumerated()), id: \.element.id) { index, node in
                 CausalChainNodeView(node: node, isLast: index == nodes.count - 1)
+                    .frame(maxWidth: .infinity, alignment: .leading)
 
                 if index < nodes.count - 1 {
                     CausalChainArrow(timeOffset: nodes[index + 1].timeOffset)
@@ -56,13 +57,21 @@ struct CausalChainNodeView: View {
                 Text(node.label)
                     .font(VITATypography.headline)
                     .foregroundStyle(VITAColors.textPrimary)
-                Text(node.detail)
-                    .font(VITATypography.caption)
-                    .foregroundStyle(VITAColors.textSecondary)
+                    .lineLimit(3)
+                    .fixedSize(horizontal: false, vertical: true)
+                if !node.detail.isEmpty {
+                    Text(node.detail)
+                        .font(VITATypography.caption)
+                        .foregroundStyle(VITAColors.textSecondary)
+                        .lineLimit(3)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
 
             Spacer()
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 

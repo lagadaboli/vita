@@ -86,142 +86,113 @@ struct DocxTemplateBuilder {
             <!-- Title -->
             <w:p>
               <w:pPr><w:jc w:val="center"/></w:pPr>
-              <w:r><w:rPr><w:b/><w:sz w:val="48"/></w:rPr><w:t>VITA Personal Health Report</w:t></w:r>
+              <w:r><w:rPr><w:b/><w:sz w:val="50"/><w:color w:val="0F766E"/></w:rPr><w:t>VITA Health Pattern Report</w:t></w:r>
+            </w:p>
+            <w:p>
+              <w:pPr><w:jc w:val="center"/></w:pPr>
+              <w:r><w:rPr><w:i/><w:color w:val="666666"/></w:rPr><w:t>AI-assisted summary from Ask VITA and connected health records</w:t></w:r>
             </w:p>
 
-            <!-- Report metadata -->
+            <!-- Metadata -->
             <w:p><w:r><w:t xml:space="preserve">Report Date:  {{ reportDate }}</w:t></w:r></w:p>
             <w:p><w:r><w:t xml:space="preserve">Report ID:    {{ reportId }}</w:t></w:r></w:p>
             <w:p><w:r><w:t xml:space="preserve"> </w:t></w:r></w:p>
 
-            <!-- Clinical notes -->
-            <w:p><w:r><w:rPr><w:b/><w:sz w:val="32"/></w:rPr><w:t>Clinical Notes</w:t></w:r></w:p>
-            <w:p><w:r><w:t xml:space="preserve">Primary Concern:     {{ primaryConcern }}</w:t></w:r></w:p>
-            <w:p><w:r><w:t xml:space="preserve">Recent Sleep Quality: {{ sleepQuality }}</w:t></w:r></w:p>
-            <w:p><w:r><w:t xml:space="preserve">Digestive Symptoms:  {{ digestiveIssues }}</w:t></w:r></w:p>
-            <w:p><w:r><w:t xml:space="preserve">Exercise This Week:  {{ exerciseFrequency }}</w:t></w:r></w:p>
-            <w:p><w:r><w:t xml:space="preserve">Goal for Visit:      {{ providerGoal }}</w:t></w:r></w:p>
+            <!-- AI summary card -->
+            <w:tbl>
+              <w:tblPr>
+                <w:tblW w:w="5000" w:type="pct"/>
+                <w:tblBorders>
+                  <w:top w:val="single" w:sz="6" w:space="0" w:color="0F766E"/>
+                  <w:left w:val="single" w:sz="6" w:space="0" w:color="0F766E"/>
+                  <w:bottom w:val="single" w:sz="6" w:space="0" w:color="0F766E"/>
+                  <w:right w:val="single" w:sz="6" w:space="0" w:color="0F766E"/>
+                  <w:insideH w:val="single" w:sz="4" w:space="0" w:color="A7D8D4"/>
+                </w:tblBorders>
+              </w:tblPr>
+              <w:tr>
+                <w:tc>
+                  <w:tcPr><w:shd w:val="clear" w:fill="EAF7F6"/></w:tcPr>
+                  <w:p><w:r><w:rPr><w:b/><w:color w:val="0F766E"/></w:rPr><w:t>{{ aiGeneratedLabel }} - {{ aiSummaryTitle }}</w:t></w:r></w:p>
+                  <w:p><w:r><w:t>{{ aiSummaryBody }}</w:t></w:r></w:p>
+                  <w:p><w:r><w:rPr><w:b/></w:rPr><w:t>Confidence:</w:t></w:r><w:r><w:t xml:space="preserve"> {{ confidenceBand }}</w:t></w:r></w:p>
+                  <w:p><w:r><w:rPr><w:b/></w:rPr><w:t>Most Likely Reason:</w:t></w:r><w:r><w:t xml:space="preserve"> {{ likelyReason }}</w:t></w:r></w:p>
+                  <w:p><w:r><w:rPr><w:b/></w:rPr><w:t>Supporting Evidence:</w:t></w:r><w:r><w:t xml:space="preserve"> {{ supportingEvidence }}</w:t></w:r></w:p>
+                  <w:p><w:r><w:rPr><w:b/></w:rPr><w:t>Next Best Action:</w:t></w:r><w:r><w:t xml:space="preserve"> {{ nextBestAction }}</w:t></w:r></w:p>
+                </w:tc>
+              </w:tr>
+            </w:tbl>
+            <w:p><w:r><w:t xml:space="preserve"> </w:t></w:r></w:p>
+
+            <!-- Top signals -->
+            <w:p><w:r><w:rPr><w:b/><w:sz w:val="32"/><w:color w:val="0F766E"/></w:rPr><w:t>Top Signals Observed</w:t></w:r></w:p>
+            <w:p><w:r><w:rPr><w:b/></w:rPr><w:t>1.</w:t></w:r><w:r><w:t xml:space="preserve"> {{ topSignal1 }}</w:t></w:r></w:p>
+            <w:p><w:r><w:rPr><w:b/></w:rPr><w:t>2.</w:t></w:r><w:r><w:t xml:space="preserve"> {{ topSignal2 }}</w:t></w:r></w:p>
+            <w:p><w:r><w:rPr><w:b/></w:rPr><w:t>3.</w:t></w:r><w:r><w:t xml:space="preserve"> {{ topSignal3 }}</w:t></w:r></w:p>
+            <w:p><w:r><w:t xml:space="preserve"> </w:t></w:r></w:p>
+
+            <!-- Ask VITA context -->
+            <w:p><w:r><w:rPr><w:b/><w:sz w:val="32"/><w:color w:val="0F766E"/></w:rPr><w:t>Ask VITA Context</w:t></w:r></w:p>
+            <w:p><w:r><w:t xml:space="preserve">User Question:       {{ primaryConcern }}</w:t></w:r></w:p>
+            <w:p><w:r><w:t xml:space="preserve">Sleep Pattern:       {{ sleepQuality }}</w:t></w:r></w:p>
+            <w:p><w:r><w:t xml:space="preserve">Digestive Signal:    {{ digestiveIssues }}</w:t></w:r></w:p>
+            <w:p><w:r><w:t xml:space="preserve">Activity Pattern:    {{ exerciseFrequency }}</w:t></w:r></w:p>
+            <w:p><w:r><w:t xml:space="preserve">Likely Driver:       {{ providerGoal }}</w:t></w:r></w:p>
             <w:p><w:r><w:t xml:space="preserve"> </w:t></w:r></w:p>
 
             <!-- Health metrics -->
-            <w:p><w:r><w:rPr><w:b/><w:sz w:val="32"/></w:rPr><w:t>Health Metrics (Apple Watch)</w:t></w:r></w:p>
-            <w:p><w:r><w:t xml:space="preserve">Health Score: {{ healthScore }}/100</w:t></w:r></w:p>
-            <w:p><w:r><w:t xml:space="preserve">HRV:          {{ hrv }}</w:t></w:r></w:p>
-            <w:p><w:r><w:t xml:space="preserve">Heart Rate:   {{ heartRate }}</w:t></w:r></w:p>
-            <w:p><w:r><w:t xml:space="preserve">Glucose:      {{ glucose }}</w:t></w:r></w:p>
-            <w:p><w:r><w:t xml:space="preserve">Sleep:        {{ sleepHours }}</w:t></w:r></w:p>
-            <w:p><w:r><w:t xml:space="preserve">Steps Today:  {{ steps }}</w:t></w:r></w:p>
-            <w:p><w:r><w:t xml:space="preserve">Skin Score:   {{ skinScore }}/100</w:t></w:r></w:p>
-            <w:p><w:r><w:t xml:space="preserve"> </w:t></w:r></w:p>
-
-            <!-- Recent meals table -->
-            <w:p><w:r><w:rPr><w:b/><w:sz w:val="32"/></w:rPr><w:t>Recent Meals</w:t></w:r></w:p>
+            <w:p><w:r><w:rPr><w:b/><w:sz w:val="32"/><w:color w:val="0F766E"/></w:rPr><w:t>Health Metrics Snapshot</w:t></w:r></w:p>
             <w:tbl>
               <w:tblPr>
                 <w:tblW w:w="5000" w:type="pct"/>
                 <w:tblBorders>
-                  <w:top w:val="single" w:sz="4" w:space="0" w:color="auto"/>
-                  <w:left w:val="single" w:sz="4" w:space="0" w:color="auto"/>
-                  <w:bottom w:val="single" w:sz="4" w:space="0" w:color="auto"/>
-                  <w:right w:val="single" w:sz="4" w:space="0" w:color="auto"/>
-                  <w:insideH w:val="single" w:sz="4" w:space="0" w:color="auto"/>
-                  <w:insideV w:val="single" w:sz="4" w:space="0" w:color="auto"/>
+                  <w:top w:val="single" w:sz="4" w:space="0" w:color="BFBFBF"/>
+                  <w:left w:val="single" w:sz="4" w:space="0" w:color="BFBFBF"/>
+                  <w:bottom w:val="single" w:sz="4" w:space="0" w:color="BFBFBF"/>
+                  <w:right w:val="single" w:sz="4" w:space="0" w:color="BFBFBF"/>
+                  <w:insideH w:val="single" w:sz="4" w:space="0" w:color="D9D9D9"/>
+                  <w:insideV w:val="single" w:sz="4" w:space="0" w:color="D9D9D9"/>
                 </w:tblBorders>
               </w:tblPr>
-              <w:tr>
-                <w:tc><w:p><w:r><w:rPr><w:b/></w:rPr><w:t>Meal</w:t></w:r></w:p></w:tc>
-                <w:tc><w:p><w:r><w:rPr><w:b/></w:rPr><w:t>Source</w:t></w:r></w:p></w:tc>
-                <w:tc><w:p><w:r><w:rPr><w:b/></w:rPr><w:t>Glycemic Load</w:t></w:r></w:p></w:tc>
-                <w:tc><w:p><w:r><w:rPr><w:b/></w:rPr><w:t>Glucose Impact</w:t></w:r></w:p></w:tc>
-              </w:tr>
-              <w:tr>
-                <w:tc><w:p><w:r><w:t>{{ TableStart:recentMeals }}{{ meal }}</w:t></w:r></w:p></w:tc>
-                <w:tc><w:p><w:r><w:t>{{ source }}</w:t></w:r></w:p></w:tc>
-                <w:tc><w:p><w:r><w:t>{{ glycemicLoad }}</w:t></w:r></w:p></w:tc>
-                <w:tc><w:p><w:r><w:t>{{ impact }}{{ TableEnd:recentMeals }}</w:t></w:r></w:p></w:tc>
-              </w:tr>
+              <w:tr><w:tc><w:p><w:r><w:t>Metric</w:t></w:r></w:p></w:tc><w:tc><w:p><w:r><w:t>Value</w:t></w:r></w:p></w:tc></w:tr>
+              <w:tr><w:tc><w:p><w:r><w:t>Health Score</w:t></w:r></w:p></w:tc><w:tc><w:p><w:r><w:t>{{ healthScore }}/100</w:t></w:r></w:p></w:tc></w:tr>
+              <w:tr><w:tc><w:p><w:r><w:t>HRV</w:t></w:r></w:p></w:tc><w:tc><w:p><w:r><w:t>{{ hrv }}</w:t></w:r></w:p></w:tc></w:tr>
+              <w:tr><w:tc><w:p><w:r><w:t>Heart Rate</w:t></w:r></w:p></w:tc><w:tc><w:p><w:r><w:t>{{ heartRate }}</w:t></w:r></w:p></w:tc></w:tr>
+              <w:tr><w:tc><w:p><w:r><w:t>Glucose</w:t></w:r></w:p></w:tc><w:tc><w:p><w:r><w:t>{{ glucose }}</w:t></w:r></w:p></w:tc></w:tr>
+              <w:tr><w:tc><w:p><w:r><w:t>Sleep</w:t></w:r></w:p></w:tc><w:tc><w:p><w:r><w:t>{{ sleepHours }}</w:t></w:r></w:p></w:tc></w:tr>
+              <w:tr><w:tc><w:p><w:r><w:t>Steps</w:t></w:r></w:p></w:tc><w:tc><w:p><w:r><w:t>{{ steps }}</w:t></w:r></w:p></w:tc></w:tr>
+              <w:tr><w:tc><w:p><w:r><w:t>Skin Score</w:t></w:r></w:p></w:tc><w:tc><w:p><w:r><w:t>{{ skinScore }}</w:t></w:r></w:p></w:tc></w:tr>
             </w:tbl>
             <w:p><w:r><w:t xml:space="preserve"> </w:t></w:r></w:p>
 
-            <!-- Skin conditions table -->
-            <w:p><w:r><w:rPr><w:b/><w:sz w:val="32"/></w:rPr><w:t>Skin Health Analysis</w:t></w:r></w:p>
-            <w:tbl>
-              <w:tblPr>
-                <w:tblW w:w="5000" w:type="pct"/>
-                <w:tblBorders>
-                  <w:top w:val="single" w:sz="4" w:space="0" w:color="auto"/>
-                  <w:left w:val="single" w:sz="4" w:space="0" w:color="auto"/>
-                  <w:bottom w:val="single" w:sz="4" w:space="0" w:color="auto"/>
-                  <w:right w:val="single" w:sz="4" w:space="0" w:color="auto"/>
-                  <w:insideH w:val="single" w:sz="4" w:space="0" w:color="auto"/>
-                  <w:insideV w:val="single" w:sz="4" w:space="0" w:color="auto"/>
-                </w:tblBorders>
-              </w:tblPr>
-              <w:tr>
-                <w:tc><w:p><w:r><w:rPr><w:b/></w:rPr><w:t>Condition</w:t></w:r></w:p></w:tc>
-                <w:tc><w:p><w:r><w:rPr><w:b/></w:rPr><w:t>Severity</w:t></w:r></w:p></w:tc>
-                <w:tc><w:p><w:r><w:rPr><w:b/></w:rPr><w:t>Zone</w:t></w:r></w:p></w:tc>
-                <w:tc><w:p><w:r><w:rPr><w:b/></w:rPr><w:t>Confidence</w:t></w:r></w:p></w:tc>
-              </w:tr>
-              <w:tr>
-                <w:tc><w:p><w:r><w:t>{{ TableStart:skinConditions }}{{ condition }}</w:t></w:r></w:p></w:tc>
-                <w:tc><w:p><w:r><w:t>{{ severity }}</w:t></w:r></w:p></w:tc>
-                <w:tc><w:p><w:r><w:t>{{ zone }}</w:t></w:r></w:p></w:tc>
-                <w:tc><w:p><w:r><w:t>{{ confidence }}{{ TableEnd:skinConditions }}</w:t></w:r></w:p></w:tc>
-              </w:tr>
-            </w:tbl>
+            <!-- Recent meals -->
+            <w:p><w:r><w:rPr><w:b/><w:sz w:val="32"/><w:color w:val="0F766E"/></w:rPr><w:t>Recent Meals and Glucose Impact</w:t></w:r></w:p>
+            <w:p><w:r><w:rPr><w:b/></w:rPr><w:t>1.</w:t></w:r><w:r><w:t xml:space="preserve"> {{ mealInsight1 }}</w:t></w:r></w:p>
+            <w:p><w:r><w:rPr><w:b/></w:rPr><w:t>2.</w:t></w:r><w:r><w:t xml:space="preserve"> {{ mealInsight2 }}</w:t></w:r></w:p>
+            <w:p><w:r><w:rPr><w:b/></w:rPr><w:t>3.</w:t></w:r><w:r><w:t xml:space="preserve"> {{ mealInsight3 }}</w:t></w:r></w:p>
             <w:p><w:r><w:t xml:space="preserve"> </w:t></w:r></w:p>
 
-            <!-- Causal findings table -->
-            <w:p><w:r><w:rPr><w:b/><w:sz w:val="32"/></w:rPr><w:t>Causal Chain Findings</w:t></w:r></w:p>
-            <w:tbl>
-              <w:tblPr>
-                <w:tblW w:w="5000" w:type="pct"/>
-                <w:tblBorders>
-                  <w:top w:val="single" w:sz="4" w:space="0" w:color="auto"/>
-                  <w:left w:val="single" w:sz="4" w:space="0" w:color="auto"/>
-                  <w:bottom w:val="single" w:sz="4" w:space="0" w:color="auto"/>
-                  <w:right w:val="single" w:sz="4" w:space="0" w:color="auto"/>
-                  <w:insideH w:val="single" w:sz="4" w:space="0" w:color="auto"/>
-                  <w:insideV w:val="single" w:sz="4" w:space="0" w:color="auto"/>
-                </w:tblBorders>
-              </w:tblPr>
-              <w:tr>
-                <w:tc><w:p><w:r><w:rPr><w:b/></w:rPr><w:t>Finding</w:t></w:r></w:p></w:tc>
-                <w:tc><w:p><w:r><w:rPr><w:b/></w:rPr><w:t>Detail</w:t></w:r></w:p></w:tc>
-                <w:tc><w:p><w:r><w:rPr><w:b/></w:rPr><w:t>Source</w:t></w:r></w:p></w:tc>
-              </w:tr>
-              <w:tr>
-                <w:tc><w:p><w:r><w:t>{{ TableStart:causalFindings }}{{ finding }}</w:t></w:r></w:p></w:tc>
-                <w:tc><w:p><w:r><w:t>{{ detail }}</w:t></w:r></w:p></w:tc>
-                <w:tc><w:p><w:r><w:t>{{ source }}{{ TableEnd:causalFindings }}</w:t></w:r></w:p></w:tc>
-              </w:tr>
-            </w:tbl>
+            <!-- Skin conditions -->
+            <w:p><w:r><w:rPr><w:b/><w:sz w:val="32"/><w:color w:val="0F766E"/></w:rPr><w:t>Skin Health Analysis</w:t></w:r></w:p>
+            <w:p><w:r><w:rPr><w:b/></w:rPr><w:t>1.</w:t></w:r><w:r><w:t xml:space="preserve"> {{ skinInsight1 }}</w:t></w:r></w:p>
+            <w:p><w:r><w:rPr><w:b/></w:rPr><w:t>2.</w:t></w:r><w:r><w:t xml:space="preserve"> {{ skinInsight2 }}</w:t></w:r></w:p>
             <w:p><w:r><w:t xml:space="preserve"> </w:t></w:r></w:p>
 
-            <!-- Recommendations table -->
-            <w:p><w:r><w:rPr><w:b/><w:sz w:val="32"/></w:rPr><w:t>Recommendations</w:t></w:r></w:p>
-            <w:tbl>
-              <w:tblPr>
-                <w:tblW w:w="5000" w:type="pct"/>
-                <w:tblBorders>
-                  <w:top w:val="single" w:sz="4" w:space="0" w:color="auto"/>
-                  <w:left w:val="single" w:sz="4" w:space="0" w:color="auto"/>
-                  <w:bottom w:val="single" w:sz="4" w:space="0" w:color="auto"/>
-                  <w:right w:val="single" w:sz="4" w:space="0" w:color="auto"/>
-                  <w:insideH w:val="single" w:sz="4" w:space="0" w:color="auto"/>
-                  <w:insideV w:val="single" w:sz="4" w:space="0" w:color="auto"/>
-                </w:tblBorders>
-              </w:tblPr>
-              <w:tr>
-                <w:tc><w:p><w:r><w:rPr><w:b/></w:rPr><w:t>Recommendation</w:t></w:r></w:p></w:tc>
-              </w:tr>
-              <w:tr>
-                <w:tc><w:p><w:r><w:t>{{ TableStart:recommendations }}{{ rec }}{{ TableEnd:recommendations }}</w:t></w:r></w:p></w:tc>
-              </w:tr>
-            </w:tbl>
+            <!-- Causal findings -->
+            <w:p><w:r><w:rPr><w:b/><w:sz w:val="32"/><w:color w:val="0F766E"/></w:rPr><w:t>Causal Chain Findings</w:t></w:r></w:p>
+            <w:p><w:r><w:rPr><w:b/></w:rPr><w:t>1.</w:t></w:r><w:r><w:t xml:space="preserve"> {{ causalInsight1 }}</w:t></w:r></w:p>
+            <w:p><w:r><w:rPr><w:b/></w:rPr><w:t>2.</w:t></w:r><w:r><w:t xml:space="preserve"> {{ causalInsight2 }}</w:t></w:r></w:p>
+            <w:p><w:r><w:rPr><w:b/></w:rPr><w:t>3.</w:t></w:r><w:r><w:t xml:space="preserve"> {{ causalInsight3 }}</w:t></w:r></w:p>
+            <w:p><w:r><w:t xml:space="preserve"> </w:t></w:r></w:p>
+
+            <!-- Recommendations -->
+            <w:p><w:r><w:rPr><w:b/><w:sz w:val="32"/><w:color w:val="0F766E"/></w:rPr><w:t>Recommended Next Experiments</w:t></w:r></w:p>
+            <w:p><w:r><w:rPr><w:b/></w:rPr><w:t>1.</w:t></w:r><w:r><w:t xml:space="preserve"> {{ recommendation1 }}</w:t></w:r></w:p>
+            <w:p><w:r><w:rPr><w:b/></w:rPr><w:t>2.</w:t></w:r><w:r><w:t xml:space="preserve"> {{ recommendation2 }}</w:t></w:r></w:p>
+            <w:p><w:r><w:rPr><w:b/></w:rPr><w:t>3.</w:t></w:r><w:r><w:t xml:space="preserve"> {{ recommendation3 }}</w:t></w:r></w:p>
 
             <w:p><w:r><w:t xml:space="preserve"> </w:t></w:r></w:p>
+            <w:p><w:r><w:rPr><w:color w:val="666666"/></w:rPr><w:t>This summary is AI generated and is not a medical diagnosis. Share this report with a licensed clinician for confirmation.</w:t></w:r></w:p>
             <w:p>
               <w:pPr><w:jc w:val="center"/></w:pPr>
               <w:r><w:rPr><w:color w:val="888888"/></w:rPr><w:t>Generated by VITA — Personal Health Causality Engine</w:t></w:r>

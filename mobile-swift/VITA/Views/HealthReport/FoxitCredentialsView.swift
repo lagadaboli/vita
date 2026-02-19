@@ -2,11 +2,20 @@ import SwiftUI
 import VITADesignSystem
 
 struct FoxitCredentialsView: View {
-    @State private var clientId: String = FoxitConfig.current.clientId
-    @State private var clientSecret: String = FoxitConfig.current.clientSecret
+    @State private var baseURL: String = FoxitConfig.current.baseURL
+    @State private var documentClientId: String = FoxitConfig.current.documentGeneration.clientId
+    @State private var documentClientSecret: String = FoxitConfig.current.documentGeneration.clientSecret
+    @State private var pdfClientId: String = FoxitConfig.current.pdfServices.clientId
+    @State private var pdfClientSecret: String = FoxitConfig.current.pdfServices.clientSecret
     @State private var isSaved = false
 
-    private var isConfigured: Bool { !clientId.isEmpty && !clientSecret.isEmpty }
+    private var isConfigured: Bool {
+        !documentClientId.isEmpty &&
+        !documentClientSecret.isEmpty &&
+        !pdfClientId.isEmpty &&
+        !pdfClientSecret.isEmpty &&
+        !baseURL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
 
     var body: some View {
         Form {
@@ -22,19 +31,46 @@ struct FoxitCredentialsView: View {
             }
 
             Section {
-                SecureField("Client ID", text: $clientId)
+                TextField("Base URL", text: $baseURL)
+                    .textContentType(.none)
+                    .autocorrectionDisabled()
+                    .textInputAutocapitalization(.never)
+                    .keyboardType(.URL)
+            } header: {
+                Text("Foxit Endpoint")
+            } footer: {
+                Text("Default: \(FoxitConfig.defaultBaseURL)")
+                    .font(VITATypography.caption2)
+            }
+
+            Section {
+                TextField("Client ID", text: $documentClientId)
                     .textContentType(.none)
                     .autocorrectionDisabled()
                     .textInputAutocapitalization(.never)
 
-                SecureField("Client Secret", text: $clientSecret)
+                SecureField("Client Secret", text: $documentClientSecret)
                     .textContentType(.password)
                     .autocorrectionDisabled()
                     .textInputAutocapitalization(.never)
             } header: {
-                Text("Foxit API Credentials")
+                Text("Document Generation API")
+            }
+
+            Section {
+                TextField("Client ID", text: $pdfClientId)
+                    .textContentType(.none)
+                    .autocorrectionDisabled()
+                    .textInputAutocapitalization(.never)
+
+                SecureField("Client Secret", text: $pdfClientSecret)
+                    .textContentType(.password)
+                    .autocorrectionDisabled()
+                    .textInputAutocapitalization(.never)
+            } header: {
+                Text("PDF Services API")
             } footer: {
-                Text("Credentials are stored securely in UserDefaults on your device. Obtain them from the Foxit Developer Portal.")
+                Text("Store separate app credentials for both Foxit APIs. Obtain keys from the Foxit Developer Portal.")
                     .font(VITATypography.caption2)
             }
 
@@ -58,10 +94,17 @@ struct FoxitCredentialsView: View {
     }
 
     private func saveCredentials() {
-        var config = FoxitConfig.current
-        config.clientId = clientId
-        config.clientSecret = clientSecret
-        FoxitConfig.current = config
+        FoxitConfig.current = FoxitConfig(
+            baseURL: baseURL.trimmingCharacters(in: .whitespacesAndNewlines),
+            documentGeneration: .init(
+                clientId: documentClientId.trimmingCharacters(in: .whitespacesAndNewlines),
+                clientSecret: documentClientSecret.trimmingCharacters(in: .whitespacesAndNewlines)
+            ),
+            pdfServices: .init(
+                clientId: pdfClientId.trimmingCharacters(in: .whitespacesAndNewlines),
+                clientSecret: pdfClientSecret.trimmingCharacters(in: .whitespacesAndNewlines)
+            )
+        )
         isSaved = true
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
             isSaved = false

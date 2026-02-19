@@ -34,21 +34,21 @@ struct SettingsView: View {
                     }
                 }
 
-                Section("Foxit PDF Reports") {
+                Section("Foxit Report APIs") {
                     NavigationLink {
                         FoxitCredentialsView()
                     } label: {
-                        Text("Foxit API Credentials")
+                        Text("Foxit API Credentials (2 Apps)")
                     }
 
                     HStack {
                         Text("API Status")
                         Spacer()
                         if FoxitConfig.current.isConfigured {
-                            Text("Configured")
+                            Text("Ready")
                                 .foregroundStyle(VITAColors.success)
                         } else {
-                            Text("Not configured")
+                            Text("Missing credentials")
                                 .foregroundStyle(VITAColors.amber)
                         }
                     }

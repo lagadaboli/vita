@@ -45,6 +45,7 @@ struct CausalExplanationCard: View {
                 .font(VITATypography.narrative)
                 .foregroundStyle(VITAColors.textSecondary)
                 .lineSpacing(4)
+                .fixedSize(horizontal: false, vertical: true)
 
             // Full Story link
             NavigationLink {
@@ -75,5 +76,6 @@ struct CausalExplanationCard: View {
         .padding(VITASpacing.cardPadding)
         .background(VITAColors.cardBackground)
         .clipShape(RoundedRectangle(cornerRadius: VITASpacing.cardCornerRadius))
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }

@@ -15,6 +15,7 @@ struct CounterfactualCard: View {
                 Text(counterfactual.description)
                     .font(VITATypography.callout)
                     .foregroundStyle(VITAColors.textPrimary)
+                    .fixedSize(horizontal: false, vertical: true)
 
                 HStack(spacing: VITASpacing.lg) {
                     HStack(spacing: VITASpacing.xs) {
@@ -44,6 +45,7 @@ struct CounterfactualCard: View {
         .padding(VITASpacing.cardPadding)
         .background(VITAColors.cardBackground)
         .clipShape(RoundedRectangle(cornerRadius: VITASpacing.cardCornerRadius))
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private var effortIcon: String {

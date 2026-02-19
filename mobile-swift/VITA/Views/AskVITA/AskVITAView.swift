@@ -8,9 +8,9 @@ struct AskVITAView: View {
 
     var body: some View {
         NavigationStack {
-            ZStack(alignment: .bottom) {
+            GeometryReader { proxy in
                 ScrollView {
-                    VStack(spacing: VITASpacing.xl) {
+                    LazyVStack(spacing: VITASpacing.xl) {
                         if !appState.isLoaded {
                             EmptyDataStateView(
                                 title: "Preparing Ask VITA",
@@ -25,13 +25,19 @@ struct AskVITAView: View {
                             resultsView
                         }
                     }
+                    .frame(width: proxy.size.width, alignment: .topLeading)
                 }
-                .padding(.bottom, 100) // Space for input bar
-
-                QueryInputView(viewModel: viewModel, appState: appState)
+                .safeAreaInset(edge: .bottom, spacing: 0) {
+                    QueryInputView(viewModel: viewModel, appState: appState)
+                }
             }
             .background(VITAColors.background)
             .navigationTitle("Ask VITA")
+            .sheet(isPresented: $viewModel.isShowingReportShareSheet) {
+                if let data = viewModel.reportPDFData {
+                    ActivityShareSheet(items: [data])
+                }
+            }
         }
     }
 
@@ -83,6 +89,7 @@ struct AskVITAView: View {
                     counterfactuals: viewModel.counterfactuals
                 )
                 .padding(.horizontal, VITASpacing.lg)
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
 
             if !viewModel.counterfactuals.isEmpty {
@@ -94,11 +101,100 @@ struct AskVITAView: View {
                     ForEach(Array(viewModel.counterfactuals.enumerated()), id: \.offset) { _, cf in
                         CounterfactualCard(counterfactual: cf)
                             .padding(.horizontal, VITASpacing.lg)
+                            .frame(maxWidth: .infinity, alignment: .leading)
                     }
                 }
             }
+
+            reportSection
         }
         .padding(.top, VITASpacing.lg)
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private var reportSection: some View {
+        VStack(alignment: .leading, spacing: VITASpacing.md) {
+            HStack {
+                Image(systemName: "doc.richtext")
+                    .foregroundStyle(VITAColors.teal)
+                Text("Clinical Report")
+                    .font(VITATypography.headline)
+                    .foregroundStyle(VITAColors.textPrimary)
+                Spacer()
+            }
+
+            Text("Generate a provider-ready PDF using your question, causal chain, and measurable health patterns.")
+                .font(VITATypography.callout)
+                .foregroundStyle(VITAColors.textSecondary)
+
+            if !FoxitConfig.current.isConfigured {
+                Text("Configure both Foxit API apps in Settings before generating.")
+                    .font(VITATypography.caption)
+                    .foregroundStyle(VITAColors.amber)
+            }
+
+            switch viewModel.reportState {
+            case .idle:
+                EmptyView()
+            case .generatingDocument:
+                reportProgress("Generating with Document Generation API…")
+            case .optimizingPDF:
+                reportProgress("Optimizing with PDF Services API…")
+            case .complete:
+                HStack(spacing: VITASpacing.sm) {
+                    Image(systemName: "checkmark.seal.fill")
+                        .foregroundStyle(VITAColors.success)
+                    Text("Report ready · \(viewModel.formattedReportFileSize)")
+                        .font(VITATypography.caption)
+                        .foregroundStyle(VITAColors.textSecondary)
+                }
+            case .error(let message):
+                Text(message)
+                    .font(VITATypography.caption)
+                    .foregroundStyle(VITAColors.error)
+            }
+
+            HStack(spacing: VITASpacing.sm) {
+                Button {
+                    Task { await viewModel.generateReport(appState: appState) }
+                } label: {
+                    Label("Generate Report", systemImage: "doc.text")
+                        .font(VITATypography.callout)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, VITASpacing.sm)
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(VITAColors.teal)
+                .disabled(!viewModel.canGenerateReport || !FoxitConfig.current.isConfigured)
+
+                Button {
+                    viewModel.isShowingReportShareSheet = true
+                } label: {
+                    Label("Share", systemImage: "square.and.arrow.up")
+                        .font(VITATypography.callout)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, VITASpacing.sm)
+                }
+                .buttonStyle(.bordered)
+                .tint(VITAColors.teal)
+                .disabled(viewModel.reportState != .complete || viewModel.reportPDFData == nil)
+            }
+        }
+        .padding(VITASpacing.cardPadding)
+        .background(VITAColors.cardBackground)
+        .clipShape(RoundedRectangle(cornerRadius: VITASpacing.cardCornerRadius))
+        .padding(.horizontal, VITASpacing.lg)
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private func reportProgress(_ title: String) -> some View {
+        HStack(spacing: VITASpacing.sm) {
+            ProgressView()
+                .tint(VITAColors.teal)
+            Text(title)
+                .font(VITATypography.caption)
+                .foregroundStyle(VITAColors.textSecondary)
+        }
     }
 }
 
@@ -118,7 +214,7 @@ struct FlowLayout: Layout {
     }
 
     private func layoutSubviews(proposal: ProposedViewSize, subviews: Subviews) -> (size: CGSize, positions: [CGPoint]) {
-        let maxWidth = proposal.width ?? .infinity
+        let maxWidth = proposal.width ?? 320
         var positions: [CGPoint] = []
         var x: CGFloat = 0
         var y: CGFloat = 0
@@ -138,4 +234,14 @@ struct FlowLayout: Layout {
 
         return (CGSize(width: maxWidth, height: y + rowHeight), positions)
     }
+}
+
+private struct ActivityShareSheet: UIViewControllerRepresentable {
+    let items: [Any]
+
+    func makeUIViewController(context: Context) -> UIActivityViewController {
+        UIActivityViewController(activityItems: items, applicationActivities: nil)
+    }
+
+    func updateUIViewController(_ uiViewController: UIActivityViewController, context: Context) {}
 }
