@@ -114,7 +114,7 @@ targets:
           NSAllowsArbitraryLoads: true
         UIBackgroundModes:
           - processing
-        VITABackendURL: "http://adityas-macbook-pro.local:8000"
+        VITABackendURL: "http://127.0.0.1:8000"
         VITAMockRotimaticEnabled: true
         VITAMockInstantPotEnabled: true
     entitlements:
