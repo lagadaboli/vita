@@ -109,6 +109,12 @@ final class DashboardViewModel {
         let yearAgo = calendar.date(byAdding: .year, value: -1, to: now) ?? now
         let dayStart = calendar.startOfDay(for: now)
 
+        // Ensure integrations history exists so dashboard can show cross-source insights.
+        if IntegrationHistoryStore.load() == nil {
+            let integrationsVM = IntegrationsViewModel()
+            integrationsVM.refresh(from: appState)
+        }
+
         // Load glucose data (live values + chart history).
         if let readings = try? appState.healthGraph.queryGlucose(from: sixHoursAgo, to: now) {
             glucoseReadings = readings.map { GlucoseDataPoint(timestamp: $0.timestamp, value: $0.glucoseMgDL) }
@@ -407,6 +413,8 @@ final class DashboardViewModel {
             ))
         }
 
+        appendIntegrationInsights(now: Date())
+
         if insights.isEmpty {
             insights.append(InsightData(
                 icon: "checkmark.seal",
@@ -416,6 +424,74 @@ final class DashboardViewModel {
                 timestamp: Date()
             ))
         }
+    }
+
+    private func appendIntegrationInsights(now: Date) {
+        guard let payload = IntegrationHistoryStore.load() else { return }
+        let cutoff = now.addingTimeInterval(-24 * 3_600)
+        let recent = payload.events
+            .filter { $0.timestamp >= cutoff }
+            .sorted { $0.timestamp > $1.timestamp }
+
+        guard !recent.isEmpty else { return }
+
+        var added = 0
+
+        if let mealEvent = recent.first(where: { $0.category == "meal" || $0.category == "cooked_meal" }) {
+            let gl = mealEvent.notes
+                .first(where: { $0.lowercased().contains("gl") })
+                .flatMap { extractLeadingInt(from: $0) } ?? 0
+            if gl >= 35, !insights.contains(where: { $0.title == "High-GL Meal Pattern" }) {
+                insights.append(InsightData(
+                    icon: "fork.knife",
+                    title: "High-GL Meal Pattern",
+                    message: "\(mealEvent.item) appears in your integration activity with GL \(gl). This can correlate with fatigue and glucose volatility.",
+                    severity: .warning,
+                    timestamp: mealEvent.timestamp
+                ))
+                added += 1
+            }
+        }
+
+        if added < 2, let scrollingEvent = recent.first(where: { $0.category == "scrolling" }),
+           !insights.contains(where: { $0.title == "Passive Scrolling Spike" }) {
+            let minutes = scrollingEvent.notes
+                .first(where: { $0.lowercased().contains("min") })
+                .flatMap { extractLeadingInt(from: $0) } ?? 0
+            let ratio = scrollingEvent.notes
+                .first(where: { $0.lowercased().contains("ratio") })
+                .flatMap { extractLeadingInt(from: $0) } ?? 0
+            insights.append(InsightData(
+                icon: "iphone",
+                title: "Passive Scrolling Spike",
+                message: "Recent behavior logs show \(minutes) minutes of passive scrolling (impulse ratio \(ratio)%). This often aligns with higher mental fatigue.",
+                severity: ratio >= 20 ? .warning : .info,
+                timestamp: scrollingEvent.timestamp
+            ))
+            added += 1
+        }
+
+        if added < 2, let envEvent = recent.first(where: { $0.category == "environment" }),
+           !insights.contains(where: { $0.title == "Environment Stress" }) {
+            let aqi = envEvent.notes
+                .first(where: { $0.uppercased().contains("AQI") })
+                .flatMap { extractLeadingInt(from: $0) } ?? 0
+            if aqi >= 100 {
+                insights.append(InsightData(
+                    icon: "aqi.medium",
+                    title: "Environment Stress",
+                    message: "Recent integration logs show AQI \(aqi), which can contribute to fatigue, headaches, and recovery drag.",
+                    severity: .warning,
+                    timestamp: envEvent.timestamp
+                ))
+            }
+        }
+    }
+
+    private func extractLeadingInt(from text: String) -> Int? {
+        let numbers = text.split { !$0.isNumber }
+        guard let first = numbers.first else { return nil }
+        return Int(first)
     }
 
     private func latestPreferredSample(from samples: [PhysiologicalSample]) -> PhysiologicalSample? {

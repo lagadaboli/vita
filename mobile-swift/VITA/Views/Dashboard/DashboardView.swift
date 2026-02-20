@@ -26,7 +26,17 @@ struct DashboardView: View {
                         }
                     }
 
-                    MiniGlucoseChart(dataPoints: viewModel.glucoseReadings, isLoading: isComponentLoading)
+                    AskVITAPromoCard {
+                        withAnimation(.easeInOut(duration: 0.2)) {
+                            appState.selectedTab = .askVITA
+                        }
+                    } onQuestionTap: { question in
+                        appState.askVITADraftQuestion = question
+                        withAnimation(.easeInOut(duration: 0.2)) {
+                            appState.selectedTab = .askVITA
+                        }
+                    }
+                    .padding(.horizontal, VITASpacing.lg)
 
                     MetricCardRow(viewModel: viewModel, isLoading: isComponentLoading)
 
@@ -55,9 +65,6 @@ struct DashboardView: View {
                             }
                         }
                     }
-
-                    IntegrationStatusRow()
-                        .padding(.horizontal, VITASpacing.lg)
                 }
                 .padding(.bottom, VITASpacing.xxl)
             }
@@ -85,6 +92,55 @@ struct DashboardView: View {
     private func refreshDashboard(force: Bool) async {
         guard appState.isLoaded else { return }
         viewModel.load(from: appState)
+    }
+}
+
+private struct AskVITAPromoCard: View {
+    let onTap: () -> Void
+    let onQuestionTap: (String) -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: VITASpacing.md) {
+            Button(action: onTap) {
+                HStack(spacing: VITASpacing.sm) {
+                    Image(systemName: "bubble.left.and.text.bubble.right.fill")
+                        .foregroundStyle(VITAColors.teal)
+                    Text("Ask VITA")
+                        .font(VITATypography.headline)
+                        .foregroundStyle(VITAColors.textPrimary)
+                    Spacer()
+                    Image(systemName: "arrow.up.right")
+                        .font(.headline)
+                        .foregroundStyle(VITAColors.teal)
+                }
+            }
+            .buttonStyle(.plain)
+
+            HStack(spacing: VITASpacing.sm) {
+                questionChip("Why is my stomach upset")
+                questionChip("why am i tired")
+            }
+        }
+        .padding(VITASpacing.cardPadding)
+        .background(VITAColors.cardBackground)
+        .clipShape(RoundedRectangle(cornerRadius: VITASpacing.cardCornerRadius))
+    }
+
+    private func questionChip(_ question: String) -> some View {
+        Button {
+            onQuestionTap(question)
+        } label: {
+            Text(question)
+                .font(VITATypography.caption2)
+                .foregroundStyle(VITAColors.teal)
+                .padding(.horizontal, VITASpacing.sm)
+                .padding(.vertical, 6)
+                .background(VITAColors.teal.opacity(0.12))
+                .clipShape(Capsule())
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
+        }
+        .buttonStyle(.plain)
     }
 }
 

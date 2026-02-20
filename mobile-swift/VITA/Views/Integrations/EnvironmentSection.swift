@@ -81,6 +81,7 @@ struct EnvironmentSection: View {
                                 .foregroundStyle(VITAColors.amber)
                         }
                     }
+
                 }
                 .padding(VITASpacing.cardPadding)
                 .background(VITAColors.cardBackground)

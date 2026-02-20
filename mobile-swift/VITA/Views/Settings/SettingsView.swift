@@ -11,26 +11,26 @@ struct SettingsView: View {
                     HStack {
                         Text("DoorDash")
                         Spacer()
-                        Text("Mock data")
-                            .foregroundStyle(VITAColors.textSecondary)
+                        Text("Connected")
+                            .foregroundStyle(VITAColors.success)
                     }
                     HStack {
                         Text("Instacart")
                         Spacer()
-                        Text("Mock data")
-                            .foregroundStyle(VITAColors.textSecondary)
+                        Text("Connected")
+                            .foregroundStyle(VITAColors.success)
                     }
                     HStack {
                         Text("Rotimatic NEXT")
                         Spacer()
-                        Text("Mock data")
+                        Text("Not connected")
                             .foregroundStyle(VITAColors.textSecondary)
                     }
                     HStack {
                         Text("Instant Pot")
                         Spacer()
-                        Text("Mock data")
-                            .foregroundStyle(VITAColors.textSecondary)
+                        Text("Connected")
+                            .foregroundStyle(VITAColors.success)
                     }
                 }
 

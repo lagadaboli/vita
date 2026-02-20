@@ -20,6 +20,7 @@ final class AppState {
     var isLoaded = false
     var loadError: String?
     var selectedTab: AppTab = .dashboard
+    var askVITADraftQuestion: String?
 
     init() {
         do {

@@ -208,6 +208,11 @@ struct VITAChatEngine: Sendable {
             p += "\n━━ ENVIRONMENT ━━\n\(envSummary)\n"
         }
 
+        // 30-day integrations history (stored locally, while UI remains 24h)
+        if let integrationSummary = IntegrationHistoryStore.buildPromptSummary(now: windowEnd) {
+            p += "\n━━ INTEGRATIONS (30-DAY LOCAL HISTORY) ━━\n\(integrationSummary)\n"
+        }
+
         // Skin Analysis (PerfectCorp YouCam — most recent scan)
         p += "\n━━ SKIN ANALYSIS (PerfectCorp YouCam AI) ━━\n"
         if let skin = skinAnalysis {

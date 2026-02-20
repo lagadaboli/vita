@@ -1,11 +1,14 @@
 import SwiftUI
 import VITADesignSystem
 import CausalityEngine
+#if canImport(UIKit)
+import UIKit
+#endif
 
 struct AskVITAView: View {
     var appState: AppState
     @State private var viewModel = AskVITAViewModel()
-    @State private var scrollID: UUID?
+    @Namespace private var composerNamespace
 
     var body: some View {
         NavigationStack {
@@ -22,15 +25,32 @@ struct AskVITAView: View {
                             if !viewModel.hasConversation {
                                 emptyState
                                     .frame(minHeight: proxy.size.height - 80)
+                                    .transition(.opacity.combined(with: .move(edge: .top)))
                             } else {
                                 conversationThread
+                                    .transition(.opacity.combined(with: .move(edge: .bottom)))
                             }
                         }
                         .frame(width: proxy.size.width, alignment: .topLeading)
                     }
+                    .scrollDismissesKeyboard(.interactively)
+                    .simultaneousGesture(
+                        DragGesture(minimumDistance: 10)
+                            .onChanged { _ in
+                                dismissKeyboard()
+                            }
+                    )
                     .safeAreaInset(edge: .bottom, spacing: 0) {
-                        QueryInputView(viewModel: viewModel, appState: appState)
+                        if viewModel.hasConversation {
+                            QueryInputView(
+                                viewModel: viewModel,
+                                appState: appState,
+                                placement: .docked,
+                                composerNamespace: composerNamespace
+                            )
+                        }
                     }
+                    .animation(.spring(response: 0.48, dampingFraction: 0.88), value: viewModel.hasConversation)
                     .onChange(of: viewModel.messages.count) { _, _ in
                         if let last = viewModel.messages.last {
                             withAnimation(.easeOut(duration: 0.3)) {
@@ -43,6 +63,16 @@ struct AskVITAView: View {
             .background(VITAColors.background)
             .navigationTitle("Ask VITA")
             .navigationBarTitleDisplayMode(.inline)
+            .onAppear {
+                dismissKeyboard()
+                consumeDraftQuestionIfNeeded()
+            }
+            .onChange(of: appState.selectedTab) { _, newTab in
+                if newTab == .askVITA {
+                    dismissKeyboard()
+                    consumeDraftQuestionIfNeeded()
+                }
+            }
             .toolbar {
                 if viewModel.hasConversation {
                     ToolbarItem(placement: .topBarTrailing) {
@@ -66,6 +96,19 @@ struct AskVITAView: View {
         }
     }
 
+    private func consumeDraftQuestionIfNeeded() {
+        let text = (appState.askVITADraftQuestion ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !text.isEmpty else { return }
+        viewModel.queryText = text
+        appState.askVITADraftQuestion = nil
+    }
+
+    private func dismissKeyboard() {
+        #if canImport(UIKit)
+        UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+        #endif
+    }
+
     // MARK: - Syncing Banner
 
     private var syncingBanner: some View {
@@ -84,28 +127,15 @@ struct AskVITAView: View {
 
     private var emptyState: some View {
         VStack(spacing: VITASpacing.xl) {
-            Spacer()
+            Spacer(minLength: VITASpacing.lg)
 
-            ZStack {
-                Circle()
-                    .fill(VITAColors.teal.opacity(0.08))
-                    .frame(width: 88, height: 88)
-                Image(systemName: "brain.head.profile")
-                    .font(.system(size: 38))
-                    .foregroundStyle(VITAColors.teal)
-            }
+            AnimatedBrainHero()
 
             VStack(spacing: VITASpacing.xs) {
                 Text("Ask anything about your health")
                     .font(VITATypography.title3)
                     .foregroundStyle(VITAColors.textPrimary)
                     .multilineTextAlignment(.center)
-
-                Text("VITA traces causal chains through your real glucose,\nHRV, meals, sleep, and behavior data.")
-                    .font(VITATypography.callout)
-                    .foregroundStyle(VITAColors.textSecondary)
-                    .multilineTextAlignment(.center)
-                    .lineSpacing(2)
             }
 
             // Data source pills
@@ -126,13 +156,16 @@ struct AskVITAView: View {
                 .multilineTextAlignment(.center)
             }
 
-            VStack(alignment: .center, spacing: VITASpacing.sm) {
-                Text("Try asking")
-                    .font(VITATypography.caption)
-                    .foregroundStyle(VITAColors.textTertiary)
+            QueryInputView(
+                viewModel: viewModel,
+                appState: appState,
+                placement: .centered,
+                composerNamespace: composerNamespace
+            )
 
+            VStack(alignment: .center, spacing: VITASpacing.sm) {
                 FlowLayout(spacing: VITASpacing.sm) {
-                    ForEach(viewModel.suggestions, id: \.self) { suggestion in
+                    ForEach(Array(viewModel.suggestions.prefix(4)), id: \.self) { suggestion in
                         ChipView(label: suggestion) {
                             viewModel.queryText = suggestion
                             Task { await viewModel.sendMessage(appState: appState) }
@@ -142,8 +175,7 @@ struct AskVITAView: View {
                 .padding(.horizontal, VITASpacing.lg)
             }
 
-            Spacer()
-            Spacer()
+            Spacer(minLength: VITASpacing.xl)
         }
         .padding(.horizontal, VITASpacing.lg)
     }
@@ -509,6 +541,71 @@ private struct ThinkingDots: View {
             while !Task.isCancelled {
                 try? await Task.sleep(nanoseconds: 400_000_000)
                 activeIndex = (activeIndex + 1) % 3
+            }
+        }
+    }
+}
+
+private struct AnimatedBrainHero: View {
+    @State private var isPulsing = false
+    @State private var isRotating = false
+
+    var body: some View {
+        ZStack {
+            Circle()
+                .fill(
+                    RadialGradient(
+                        colors: [
+                            VITAColors.teal.opacity(0.18),
+                            VITAColors.teal.opacity(0.04),
+                            .clear
+                        ],
+                        center: .center,
+                        startRadius: 2,
+                        endRadius: 70
+                    )
+                )
+                .frame(width: 132, height: 132)
+
+            Circle()
+                .stroke(
+                    AngularGradient(
+                        colors: [
+                            VITAColors.teal.opacity(0.12),
+                            VITAColors.teal.opacity(0.8),
+                            VITAColors.teal.opacity(0.12)
+                        ],
+                        center: .center
+                    ),
+                    lineWidth: 2.5
+                )
+                .frame(width: 106, height: 106)
+                .rotationEffect(.degrees(isRotating ? 360 : 0))
+
+            Circle()
+                .stroke(
+                    VITAColors.teal.opacity(0.25),
+                    style: StrokeStyle(lineWidth: 1.2, dash: [5, 8])
+                )
+                .frame(width: 122, height: 122)
+                .rotationEffect(.degrees(isRotating ? -360 : 0))
+
+            Circle()
+                .fill(VITAColors.teal.opacity(0.12))
+                .frame(width: 88, height: 88)
+
+            Image(systemName: "brain.head.profile")
+                .font(.system(size: 38, weight: .medium))
+                .foregroundStyle(VITAColors.teal)
+        }
+        .scaleEffect(isPulsing ? 1.04 : 0.95)
+        .shadow(color: VITAColors.teal.opacity(0.25), radius: isPulsing ? 24 : 10, y: 10)
+        .onAppear {
+            withAnimation(.easeInOut(duration: 2.2).repeatForever(autoreverses: true)) {
+                isPulsing = true
+            }
+            withAnimation(.linear(duration: 14).repeatForever(autoreverses: false)) {
+                isRotating = true
             }
         }
     }

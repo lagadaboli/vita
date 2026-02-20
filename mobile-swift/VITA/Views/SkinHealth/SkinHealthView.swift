@@ -4,6 +4,7 @@ import VITADesignSystem
 struct SkinHealthView: View {
     var appState: AppState
     @State private var viewModel: SkinHealthViewModel
+    @State private var isRecommendationsExpanded = true
 
     init(appState: AppState) {
         self.appState = appState
@@ -374,22 +375,36 @@ struct SkinHealthView: View {
 
     private var recommendationsCard: some View {
         VStack(alignment: .leading, spacing: VITASpacing.md) {
-            HStack(spacing: VITASpacing.xs) {
-                Image(systemName: "lightbulb.fill")
-                    .foregroundStyle(VITAColors.amber)
-                Text("Recommendations")
-                    .font(VITATypography.title3)
+            Button {
+                withAnimation(.easeInOut(duration: 0.2)) {
+                    isRecommendationsExpanded.toggle()
+                }
+            } label: {
+                HStack(spacing: VITASpacing.xs) {
+                    Image(systemName: "lightbulb.fill")
+                        .foregroundStyle(VITAColors.amber)
+                    Text("Recommendations")
+                        .font(VITATypography.title3)
+                        .foregroundStyle(VITAColors.textPrimary)
+                    Spacer()
+                    Image(systemName: isRecommendationsExpanded ? "chevron.up" : "chevron.down")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(VITAColors.textTertiary)
+                }
             }
+            .buttonStyle(.plain)
 
-            ForEach(Array(viewModel.recommendations.enumerated()), id: \.offset) { _, rec in
-                HStack(alignment: .top, spacing: VITASpacing.sm) {
-                    Circle()
-                        .fill(VITAColors.teal)
-                        .frame(width: 6, height: 6)
-                        .padding(.top, 5)
-                    Text(rec)
-                        .font(VITATypography.caption)
-                        .foregroundStyle(VITAColors.textSecondary)
+            if isRecommendationsExpanded {
+                ForEach(Array(viewModel.recommendations.enumerated()), id: \.offset) { _, rec in
+                    HStack(alignment: .top, spacing: VITASpacing.sm) {
+                        Circle()
+                            .fill(VITAColors.teal)
+                            .frame(width: 6, height: 6)
+                            .padding(.top, 5)
+                        Text(rec)
+                            .font(VITATypography.caption)
+                            .foregroundStyle(VITAColors.textSecondary)
+                    }
                 }
             }
         }

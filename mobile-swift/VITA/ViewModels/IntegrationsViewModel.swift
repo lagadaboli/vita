@@ -11,25 +11,31 @@ final class IntegrationsViewModel {
     var watchHR: Double = 64
     var watchSteps: Int = 4800
 
-    // DoorDash orders
+    // DoorDash orders (24h slice for UI)
     var doordashOrders: [DoorDashOrder] = []
 
-    // Rotimatic sessions
+    // Rotimatic sessions (24h slice for UI)
     var rotimaticSessions: [RotimaticSession] = []
 
-    // Instant Pot programs
+    // Instant Pot programs (24h slice for UI)
     var instantPotPrograms: [InstantPotProgram] = []
 
-    // Instacart orders
+    // Instacart orders (24h slice for UI)
     var instacartOrders: [InstacartOrder] = []
 
-    // Body scale / weight
+    // Body scale / weight (24h slice for UI)
     var weightReadings: [WeightReading] = []
 
-    // Zombie scrolling sessions
+    // Zombie scrolling sessions (24h slice for UI)
     var zombieScrollSessions: [ZombieScrollSession] = []
 
-    // Environment readings
+    // Screen Time sessions (24h slice for UI)
+    var screenTimeSessions: [ScreenTimeSession] = []
+
+    // Latest skin scan (real-time from Skin Audit)
+    var latestSkinSnapshot: SkinSnapshot?
+
+    // Environment readings (24h slice for UI)
     var environmentReadings: [EnvironmentReading] = []
     private var appState: AppState?
 
@@ -38,6 +44,7 @@ final class IntegrationsViewModel {
     struct DoorDashOrder: Identifiable {
         let id = UUID()
         let name: String
+        let classification: String
         let timestamp: Date
         let glycemicLoad: Double
         let ingredients: [String]
@@ -47,6 +54,7 @@ final class IntegrationsViewModel {
     struct RotimaticSession: Identifiable {
         let id = UUID()
         let flourType: String
+        let classification: String
         let count: Int
         let timestamp: Date
         let glycemicLoad: Double
@@ -56,6 +64,7 @@ final class IntegrationsViewModel {
     struct InstantPotProgram: Identifiable {
         let id = UUID()
         let recipe: String
+        let classification: String
         let mode: String
         let timestamp: Date
         let bioavailability: Double
@@ -65,6 +74,7 @@ final class IntegrationsViewModel {
     struct InstacartOrder: Identifiable {
         let id = UUID()
         let label: String
+        let classification: String
         let timestamp: Date
         let items: [InstacartItem]
         let totalGL: Double
@@ -74,6 +84,7 @@ final class IntegrationsViewModel {
     struct InstacartItem: Identifiable {
         let id = UUID()
         let name: String
+        let classification: String
         let glycemicIndex: Double?
     }
 
@@ -82,6 +93,7 @@ final class IntegrationsViewModel {
         let timestamp: Date
         let weightKg: Double
         let delta: Double?
+        let classification: String
     }
 
     struct ZombieScrollSession: Identifiable {
@@ -96,6 +108,29 @@ final class IntegrationsViewModel {
         }
     }
 
+    struct ScreenTimeSession: Identifiable {
+        let id = UUID()
+        let timestamp: Date
+        let appName: String
+        let category: String
+        let minutes: Int
+        let pickups: Int
+    }
+
+    struct SkinConditionSnapshot: Identifiable {
+        let id = UUID()
+        let type: String
+        let uiScore: Int
+        let severity: Double
+    }
+
+    struct SkinSnapshot {
+        let timestamp: Date
+        let overallScore: Int
+        let source: String
+        let conditions: [SkinConditionSnapshot]
+    }
+
     struct EnvironmentReading: Identifiable {
         let id = UUID()
         let timestamp: Date
@@ -105,6 +140,7 @@ final class IntegrationsViewModel {
         let uvIndex: Double
         let pollenIndex: Int
         let healthImpact: String
+        let classification: String
     }
 
     // MARK: - Mock Data Pools
@@ -196,6 +232,17 @@ final class IntegrationsViewModel {
         (12, 85,  12, 0.3, 5, "High humidity, high pollen"),
     ]
 
+    private static let screenTimeApps: [(name: String, category: String)] = [
+        ("Instagram", "social"),
+        ("YouTube", "video"),
+        ("Reddit", "community"),
+        ("Safari", "browsing"),
+        ("WhatsApp", "messaging"),
+        ("Slack", "work"),
+        ("LinkedIn", "career"),
+        ("Netflix", "video"),
+    ]
+
     // MARK: - Load / Refresh
 
     func load(from appState: AppState) {
@@ -209,114 +256,40 @@ final class IntegrationsViewModel {
         }
 
         let now = Date()
+        let cutoff24h = now.addingTimeInterval(-24 * 3_600)
 
-        // Apple Watch — randomised each refresh
-        watchHRV = (Double.random(in: 34...82) * 10).rounded() / 10
-        watchHR = (Double.random(in: 54...91) * 10).rounded() / 10
-        watchSteps = Int.random(in: 1800...13500)
-        watchSyncDate = now.addingTimeInterval(-Double.random(in: 90...900))
-
-        // DoorDash — pick 4–5 random orders
-        let ddCount = Int.random(in: 4...5)
-        doordashOrders = Self.doordashPool.shuffled().prefix(ddCount).enumerated().map { index, item in
-            let daysBack = Double(index) * Double.random(in: 1.2...2.8) + Double.random(in: 0...0.5)
-            let gl = (item.gl + Double.random(in: -3...3)).clamped(to: 5...60)
-            return DoorDashOrder(
-                name: item.name,
-                timestamp: now.addingTimeInterval(-daysBack * 86400),
-                glycemicLoad: gl,
-                ingredients: item.ingredients,
-                glucoseImpact: impactLabel(for: gl)
-            )
-        }
-
-        // Rotimatic — pick 2
-        rotimaticSessions = Self.rotimatics.shuffled().prefix(2).enumerated().map { index, r in
-            let gl = Double.random(in: r.glRange)
-            return RotimaticSession(
-                flourType: r.flourType,
-                count: Int.random(in: 4...10),
-                timestamp: now.addingTimeInterval(-Double(index + 1) * 86400 * Double.random(in: 1...3)),
-                glycemicLoad: gl,
-                glucoseImpact: r.isWholegrain ? "Moderate, steady curve" : "Sharp spike + crash"
-            )
-        }
-
-        // Instant Pot — pick 2
-        instantPotPrograms = Self.ipRecipes.shuffled().prefix(2).enumerated().map { index, r in
-            let bio = Double.random(in: r.bioavailability)
-            return InstantPotProgram(
-                recipe: r.recipe,
-                mode: r.isPressure ? "Pressure Cook" : "Slow Cook",
-                timestamp: now.addingTimeInterval(-Double(index + 1) * 86400 * Double.random(in: 0.5...2.5)),
-                bioavailability: (bio * 100).rounded() / 100,
-                note: r.isPressure ? "95% lectin deactivation" : "~60% lectin deactivation — consider pressure cook"
-            )
-        }
-
-        // Instacart — pick 2–3 orders
-        let icCount = Int.random(in: 2...3)
-        instacartOrders = Self.instacartPool.shuffled().prefix(icCount).enumerated().map { index, item in
-            let gl = (item.gl + Double.random(in: -2...2)).clamped(to: 2...60)
-            let score: Int
-            if gl < 12      { score = Int.random(in: 82...95) }
-            else if gl < 25 { score = Int.random(in: 60...80) }
-            else            { score = Int.random(in: 35...58) }
-            return InstacartOrder(
-                label: item.label,
-                timestamp: now.addingTimeInterval(-Double(index) * 86400 * Double.random(in: 1...4)),
-                items: item.items.map { InstacartItem(name: $0.name, glycemicIndex: $0.gi) },
-                totalGL: gl,
-                healthScore: score
-            )
-        }
-
-        // Weight — 7 days with slight variation
-        let baseWeight = Double.random(in: 68.5...73.5)
-        weightReadings = (0..<7).map { daysBack in
-            let w = (baseWeight + Double.random(in: -0.4...0.4) - Double(daysBack) * 0.04)
-            let rounded = (w * 10).rounded() / 10
-            return WeightReading(
-                timestamp: now.addingTimeInterval(-Double(daysBack) * 86400),
-                weightKg: rounded,
-                delta: daysBack < 6 ? (Double.random(in: -0.35...0.35) * 10).rounded() / 10 : nil
-            )
-        }
-
-        // Zombie scrolling — present ~40% of the time
-        if Double.random(in: 0...1) < 0.4 {
-            let duration = Double.random(in: 10...50)
-            let viewed = Int.random(in: 20...90)
-            let purchased = Int.random(in: 2...max(2, min(15, viewed / 4)))
-            zombieScrollSessions = [
-                ZombieScrollSession(
-                    timestamp: now.addingTimeInterval(-Double.random(in: 1800...72000)),
-                    durationMinutes: (duration * 10).rounded() / 10,
-                    itemsViewed: viewed,
-                    itemsPurchased: purchased,
-                    impulseRatio: (Double(purchased) / Double(viewed) * 100).rounded() / 100
-                )
-            ]
+        let generated = generate30DayData(now: now)
+        var historyEvents = generated.historyEvents
+        if let skinSync = syncedSkinData(now: now) {
+            latestSkinSnapshot = skinSync.snapshot
+            historyEvents.append(contentsOf: skinSync.historyEvents)
         } else {
-            zombieScrollSessions = []
+            latestSkinSnapshot = nil
         }
 
-        // Environment — prefer HealthGraph so Dashboard and Integrations stay consistent.
+        // Persist full 30-day dataset for Ask VITA context.
+        IntegrationHistoryStore.save(events: historyEvents, generatedAt: now)
+
+        // UI must remain 24h only.
+        doordashOrders = generated.doordashOrders.filter { $0.timestamp >= cutoff24h }.sorted { $0.timestamp > $1.timestamp }
+        rotimaticSessions = generated.rotimaticSessions.filter { $0.timestamp >= cutoff24h }.sorted { $0.timestamp > $1.timestamp }
+        instantPotPrograms = generated.instantPotPrograms.filter { $0.timestamp >= cutoff24h }.sorted { $0.timestamp > $1.timestamp }
+        instacartOrders = generated.instacartOrders.filter { $0.timestamp >= cutoff24h }.sorted { $0.timestamp > $1.timestamp }
+        weightReadings = generated.weightReadings.filter { $0.timestamp >= cutoff24h }.sorted { $0.timestamp > $1.timestamp }
+        zombieScrollSessions = generated.zombieScrollSessions.filter { $0.timestamp >= cutoff24h }.sorted { $0.timestamp > $1.timestamp }
+        screenTimeSessions = generated.screenTimeSessions.filter { $0.timestamp >= cutoff24h }.sorted { $0.timestamp > $1.timestamp }
+
         if let syncedEnvironment = syncedEnvironmentReadings(now: now) {
-            environmentReadings = syncedEnvironment
+            environmentReadings = syncedEnvironment.filter { $0.timestamp >= cutoff24h }.sorted { $0.timestamp > $1.timestamp }
         } else {
-            environmentReadings = Self.envConditions.shuffled().prefix(3).enumerated().map { index, c in
-                EnvironmentReading(
-                    timestamp: now.addingTimeInterval(-Double(index) * 86400),
-                    temperatureCelsius: (c.temp + Double.random(in: -1.5...1.5) * 10).rounded() / 10,
-                    humidity: (c.humidity + Double.random(in: -4...4)).clamped(to: 10...100),
-                    aqiUS: (c.aqi + Int.random(in: -8...8)).clamped(to: 5...200),
-                    uvIndex: (c.uv + Double.random(in: -0.4...0.4)).clamped(to: 0...11),
-                    pollenIndex: c.pollen,
-                    healthImpact: c.impact
-                )
-            }
-            .sorted { $0.timestamp < $1.timestamp }
+            environmentReadings = generated.environmentReadings.filter { $0.timestamp >= cutoff24h }.sorted { $0.timestamp > $1.timestamp }
+        }
+
+        if let latestWatch = generated.watchSnapshots.max(by: { $0.timestamp < $1.timestamp }) {
+            watchSyncDate = latestWatch.timestamp
+            watchHRV = latestWatch.hrv
+            watchHR = latestWatch.hr
+            watchSteps = latestWatch.steps
         }
     }
 
@@ -330,7 +303,7 @@ final class IntegrationsViewModel {
             return nil
         }
 
-        return conditions.suffix(6).map { condition in
+        return conditions.suffix(24).map { condition in
             EnvironmentReading(
                 timestamp: condition.timestamp,
                 temperatureCelsius: condition.temperatureCelsius,
@@ -338,9 +311,305 @@ final class IntegrationsViewModel {
                 aqiUS: condition.aqiUS,
                 uvIndex: condition.uvIndex,
                 pollenIndex: condition.pollenIndex,
-                healthImpact: healthImpact(for: condition)
+                healthImpact: healthImpact(for: condition),
+                classification: "environment: AQI \(condition.aqiUS), UV \(Int(condition.uvIndex))"
             )
         }
+    }
+
+    private struct SyncedSkinData {
+        let snapshot: SkinSnapshot
+        let historyEvents: [IntegrationHistoryEvent]
+    }
+
+    private func syncedSkinData(now: Date) -> SyncedSkinData? {
+        guard let appState else { return nil }
+        let lookback = now.addingTimeInterval(-365 * 86_400)
+        let records = (try? appState.healthGraph.querySkinAnalyses(from: lookback, to: now)) ?? []
+        let realRecords = records.filter { $0.apiSource.lowercased() != "demo" }
+        guard let latest = realRecords.first else { return nil }
+
+        let snapshot = SkinSnapshot(
+            timestamp: latest.timestamp,
+            overallScore: latest.overallScore,
+            source: latest.apiSource,
+            conditions: latest.conditions.map {
+                SkinConditionSnapshot(
+                    type: $0.type,
+                    uiScore: $0.uiScore,
+                    severity: $0.severity
+                )
+            }
+        )
+
+        let historyEvents = realRecords.flatMap { record in
+            record.conditions.map { condition in
+                IntegrationHistoryEvent(
+                    source: "skin_scan",
+                    category: "skin",
+                    item: condition.type,
+                    timestamp: record.timestamp,
+                    notes: [
+                        "ui \(condition.uiScore)",
+                        "sev \(String(format: "%.2f", condition.severity))"
+                    ]
+                )
+            }
+        }
+
+        return SyncedSkinData(snapshot: snapshot, historyEvents: historyEvents)
+    }
+
+    // MARK: - 30 Day Mock Generation
+
+    private struct WatchSnapshot {
+        let timestamp: Date
+        let hrv: Double
+        let hr: Double
+        let steps: Int
+    }
+
+    private struct GeneratedData {
+        let doordashOrders: [DoorDashOrder]
+        let rotimaticSessions: [RotimaticSession]
+        let instantPotPrograms: [InstantPotProgram]
+        let instacartOrders: [InstacartOrder]
+        let weightReadings: [WeightReading]
+        let zombieScrollSessions: [ZombieScrollSession]
+        let screenTimeSessions: [ScreenTimeSession]
+        let environmentReadings: [EnvironmentReading]
+        let watchSnapshots: [WatchSnapshot]
+        let historyEvents: [IntegrationHistoryEvent]
+    }
+
+    private func generate30DayData(now: Date) -> GeneratedData {
+        var dd: [DoorDashOrder] = []
+        var roti: [RotimaticSession] = []
+        var ip: [InstantPotProgram] = []
+        var ic: [InstacartOrder] = []
+        var weight: [WeightReading] = []
+        var zombie: [ZombieScrollSession] = []
+        var screenTime: [ScreenTimeSession] = []
+        var env: [EnvironmentReading] = []
+        var watch: [WatchSnapshot] = []
+        var events: [IntegrationHistoryEvent] = []
+
+        let baseWeight = Double.random(in: 68.5...73.5)
+
+        for day in 0..<30 {
+            let dayBase = now.addingTimeInterval(-Double(day) * 86_400)
+
+            // DoorDash 0-2/day
+            for _ in 0..<Int.random(in: 0...2) {
+                guard let item = Self.doordashPool.randomElement() else { continue }
+                let t = dayBase.addingTimeInterval(-Double.random(in: 0...82_800))
+                let gl = (item.gl + Double.random(in: -3...3)).clamped(to: 5...60)
+                let order = DoorDashOrder(
+                    name: item.name,
+                    classification: "meal: \(item.name)",
+                    timestamp: t,
+                    glycemicLoad: gl,
+                    ingredients: item.ingredients,
+                    glucoseImpact: impactLabel(for: gl)
+                )
+                dd.append(order)
+                events.append(IntegrationHistoryEvent(
+                    source: "doordash",
+                    category: "meal",
+                    item: item.name,
+                    timestamp: t,
+                    notes: ["GL \(Int(gl))", order.glucoseImpact]
+                ))
+            }
+
+            // Rotimatic 0-1/day
+            if Bool.random(), let r = Self.rotimatics.randomElement() {
+                let t = dayBase.addingTimeInterval(-Double.random(in: 0...82_800))
+                let gl = Double.random(in: r.glRange)
+                let session = RotimaticSession(
+                    flourType: r.flourType,
+                    classification: "meal prep: \(r.flourType)",
+                    count: Int.random(in: 4...10),
+                    timestamp: t,
+                    glycemicLoad: gl,
+                    glucoseImpact: r.isWholegrain ? "Moderate, steady curve" : "Sharp spike + crash"
+                )
+                roti.append(session)
+                events.append(IntegrationHistoryEvent(
+                    source: "rotimatic",
+                    category: "meal_prep",
+                    item: r.flourType,
+                    timestamp: t,
+                    notes: ["count \(session.count)", "GL \(Int(gl))"]
+                ))
+            }
+
+            // Instant Pot 0-1/day
+            if Bool.random(), let r = Self.ipRecipes.randomElement() {
+                let t = dayBase.addingTimeInterval(-Double.random(in: 0...82_800))
+                let bio = Double.random(in: r.bioavailability)
+                let program = InstantPotProgram(
+                    recipe: r.recipe,
+                    classification: "cooked meal: \(r.recipe)",
+                    mode: r.isPressure ? "Pressure Cook" : "Slow Cook",
+                    timestamp: t,
+                    bioavailability: (bio * 100).rounded() / 100,
+                    note: r.isPressure ? "95% lectin deactivation" : "~60% lectin deactivation — consider pressure cook"
+                )
+                ip.append(program)
+                events.append(IntegrationHistoryEvent(
+                    source: "instant_pot",
+                    category: "cooked_meal",
+                    item: r.recipe,
+                    timestamp: t,
+                    notes: [program.mode, "bio \(String(format: "%.2f", bio))"]
+                ))
+            }
+
+            // Instacart every ~2 days
+            if day % 2 == 0, let entry = Self.instacartPool.randomElement() {
+                let t = dayBase.addingTimeInterval(-Double.random(in: 0...82_800))
+                let gl = (entry.gl + Double.random(in: -2...2)).clamped(to: 2...60)
+                let score: Int = gl < 12 ? Int.random(in: 82...95) : (gl < 25 ? Int.random(in: 60...80) : Int.random(in: 35...58))
+                let order = InstacartOrder(
+                    label: entry.label,
+                    classification: "grocery basket: \(entry.label)",
+                    timestamp: t,
+                    items: entry.items.map { InstacartItem(name: $0.name, classification: "grocery: \($0.name)", glycemicIndex: $0.gi) },
+                    totalGL: gl,
+                    healthScore: score
+                )
+                ic.append(order)
+                for item in order.items {
+                    events.append(IntegrationHistoryEvent(
+                        source: "instacart",
+                        category: "grocery",
+                        item: item.name,
+                        timestamp: t,
+                        notes: item.glycemicIndex.map { ["GI \(Int($0))"] } ?? []
+                    ))
+                }
+            }
+
+            // Weight daily
+            let tWeight = dayBase.addingTimeInterval(-Double.random(in: 0...7_200))
+            let w = (baseWeight + Double.random(in: -0.4...0.4) - Double(day) * 0.03)
+            let roundedW = (w * 10).rounded() / 10
+            let reading = WeightReading(
+                timestamp: tWeight,
+                weightKg: roundedW,
+                delta: day == 29 ? nil : (Double.random(in: -0.35...0.35) * 10).rounded() / 10,
+                classification: "body metric: weight \(String(format: "%.1f", roundedW))kg"
+            )
+            weight.append(reading)
+            events.append(IntegrationHistoryEvent(
+                source: "body_scale",
+                category: "body_metric",
+                item: "weight",
+                timestamp: tWeight,
+                notes: [String(format: "%.1fkg", roundedW)]
+            ))
+
+            // Zombie scrolling ~40%
+            if Double.random(in: 0...1) < 0.4 {
+                let viewed = Int.random(in: 20...90)
+                let purchased = Int.random(in: 2...max(2, min(15, viewed / 4)))
+                let duration = Double.random(in: 10...50)
+                let t = dayBase.addingTimeInterval(-Double.random(in: 0...82_800))
+                let z = ZombieScrollSession(
+                    timestamp: t,
+                    durationMinutes: (duration * 10).rounded() / 10,
+                    itemsViewed: viewed,
+                    itemsPurchased: purchased,
+                    impulseRatio: (Double(purchased) / Double(viewed) * 100).rounded() / 100
+                )
+                zombie.append(z)
+                events.append(IntegrationHistoryEvent(
+                    source: "behavior",
+                    category: "scrolling",
+                    item: "impulse_browsing",
+                    timestamp: t,
+                    notes: ["\(Int(z.durationMinutes))min", "ratio \(Int(z.impulseRatio * 100))%"]
+                ))
+            }
+
+            // Screen Time sessions 2–5/day
+            let sessionCount = Int.random(in: 2...5)
+            for _ in 0..<sessionCount {
+                guard let app = Self.screenTimeApps.randomElement() else { continue }
+                let t = dayBase.addingTimeInterval(-Double.random(in: 0...82_800))
+                let minutes = Int.random(in: 8...96)
+                let pickups = Int.random(in: 2...24)
+                let session = ScreenTimeSession(
+                    timestamp: t,
+                    appName: app.name,
+                    category: app.category,
+                    minutes: minutes,
+                    pickups: pickups
+                )
+                screenTime.append(session)
+                events.append(IntegrationHistoryEvent(
+                    source: "screen_time",
+                    category: "screen_time",
+                    item: app.name,
+                    timestamp: t,
+                    notes: ["\(minutes)min", "\(pickups) pickups", app.category]
+                ))
+            }
+
+            // Environment daily
+            if let c = Self.envConditions.randomElement() {
+                let t = dayBase.addingTimeInterval(-Double.random(in: 0...82_800))
+                let e = EnvironmentReading(
+                    timestamp: t,
+                    temperatureCelsius: (c.temp + Double.random(in: -1.5...1.5) * 10).rounded() / 10,
+                    humidity: (c.humidity + Double.random(in: -4...4)).clamped(to: 10...100),
+                    aqiUS: (c.aqi + Int.random(in: -8...8)).clamped(to: 5...200),
+                    uvIndex: (c.uv + Double.random(in: -0.4...0.4)).clamped(to: 0...11),
+                    pollenIndex: c.pollen,
+                    healthImpact: c.impact,
+                    classification: "environment: AQI \((c.aqi + Int.random(in: -8...8)).clamped(to: 5...200)), UV \(String(format: "%.1f", c.uv))"
+                )
+                env.append(e)
+                events.append(IntegrationHistoryEvent(
+                    source: "environment",
+                    category: "environment",
+                    item: "aqi_uv_pollen",
+                    timestamp: t,
+                    notes: ["AQI \(e.aqiUS)", "UV \(String(format: "%.1f", e.uvIndex))", "Pollen \(e.pollenIndex)"]
+                ))
+            }
+
+            // Watch daily snapshot
+            let tWatch = dayBase.addingTimeInterval(-Double.random(in: 0...3_600))
+            let snapshot = WatchSnapshot(
+                timestamp: tWatch,
+                hrv: (Double.random(in: 34...82) * 10).rounded() / 10,
+                hr: (Double.random(in: 54...91) * 10).rounded() / 10,
+                steps: Int.random(in: 1800...13_500)
+            )
+            watch.append(snapshot)
+            events.append(IntegrationHistoryEvent(
+                source: "apple_watch",
+                category: "wearable_metric",
+                item: "hr_hrv_steps",
+                timestamp: tWatch,
+                notes: ["HR \(Int(snapshot.hr))", "HRV \(Int(snapshot.hrv))", "steps \(snapshot.steps)"]
+            ))
+        }
+
+        return GeneratedData(
+            doordashOrders: dd,
+            rotimaticSessions: roti,
+            instantPotPrograms: ip,
+            instacartOrders: ic,
+            weightReadings: weight,
+            zombieScrollSessions: zombie,
+            screenTimeSessions: screenTime,
+            environmentReadings: env,
+            watchSnapshots: watch,
+            historyEvents: events
+        )
     }
 
     // MARK: - Helpers

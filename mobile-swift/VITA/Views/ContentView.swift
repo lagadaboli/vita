@@ -14,7 +14,7 @@ struct ContentView: View {
             DashboardView(appState: appState)
                 .tag(AppState.AppTab.dashboard)
                 .tabItem {
-                    Label("Dashboard", systemImage: "heart.text.clipboard")
+                    Label("Summary", systemImage: "heart.text.clipboard")
                 }
 
             AskVITAView(appState: appState)
@@ -26,7 +26,7 @@ struct ContentView: View {
             IntegrationsView(appState: appState)
                 .tag(AppState.AppTab.integrations)
                 .tabItem {
-                    Label("Integrations", systemImage: "link")
+                    Label("Lifestyle", systemImage: "link")
                 }
 
             TimelineView(appState: appState)
@@ -44,7 +44,7 @@ struct ContentView: View {
             SettingsView(appState: appState)
                 .tag(AppState.AppTab.settings)
                 .tabItem {
-                    Label("Settings", systemImage: "gearshape")
+                    Label("More", systemImage: "ellipsis")
                 }
         }
         .tint(VITAColors.teal)
