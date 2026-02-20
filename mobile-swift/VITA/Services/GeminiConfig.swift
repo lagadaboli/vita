@@ -11,11 +11,12 @@ struct GeminiConfig {
 
     static let defaultModel = "gemini-2.0-flash"
 
-    // All free-tier models available for selection
+    // Available Gemini/Gemma models for selection
     static let availableModels: [(id: String, label: String)] = [
         ("gemini-2.0-flash",      "Gemini 2.0 Flash (recommended)"),
         ("gemini-2.0-flash-lite", "Gemini 2.0 Flash Lite (fastest)"),
-        ("gemini-1.5-flash",      "Gemini 1.5 Flash (stable)")
+        ("gemini-1.5-flash",      "Gemini 1.5 Flash (stable)"),
+        ("gemma-3n-e2b-it",       "Gemma 3n E2B (light)")
     ]
 
     static var current: GeminiConfig {

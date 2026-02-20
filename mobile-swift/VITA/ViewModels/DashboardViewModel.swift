@@ -232,8 +232,9 @@ final class DashboardViewModel {
             weightTrend = .stable
         }
 
-        // Load environment (most recent AQI).
-        if let conditions = try? appState.healthGraph.queryEnvironment(from: dayStart, to: now),
+        // Load environment (most recent AQI in recent window).
+        let environmentLookback = calendar.date(byAdding: .day, value: -3, to: now) ?? dayStart
+        if let conditions = try? appState.healthGraph.queryEnvironment(from: environmentLookback, to: now),
            let latest = conditions.last {
             currentAQI = latest.aqiUS
         } else {

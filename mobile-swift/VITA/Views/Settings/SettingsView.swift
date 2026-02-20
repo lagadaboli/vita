@@ -48,7 +48,7 @@ struct SettingsView: View {
                             HStack(spacing: 4) {
                                 Image(systemName: "sparkles")
                                     .font(.caption)
-                                Text("Gemini \(GeminiConfig.current.model.replacingOccurrences(of: "gemini-", with: ""))")
+                                Text(displayModelName(GeminiConfig.current.model))
                             }
                             .foregroundStyle(VITAColors.success)
                         } else {
@@ -140,6 +140,16 @@ struct SettingsView: View {
             }
             .navigationTitle("Settings")
         }
+    }
+
+    private func displayModelName(_ model: String) -> String {
+        if model.hasPrefix("gemma-") {
+            return "Gemma \(model.replacingOccurrences(of: "gemma-", with: ""))"
+        }
+        if model.hasPrefix("gemini-") {
+            return "Gemini \(model.replacingOccurrences(of: "gemini-", with: ""))"
+        }
+        return model
     }
 }
 

@@ -43,7 +43,7 @@ struct GeminiCredentialsView: View {
             } header: {
                 Text("Model")
             } footer: {
-                Text("Gemini 2.0 Flash is recommended — fastest free model with 1M context window.")
+                Text("Gemini 2.0 Flash is recommended. Gemma 3n is a lighter option for faster/cheaper runs.")
                     .font(VITATypography.caption2)
             }
 

@@ -40,8 +40,8 @@ struct VITAChatEngine: Sendable {
         let windowStart = now.addingTimeInterval(-6 * 3_600)
 
         // ── Step 1: Causal Analysis ────────────────────────────────────────────
-        let explanations: [CausalExplanation]
-        let counterfactuals: [Counterfactual]
+        var explanations: [CausalExplanation]
+        var counterfactuals: [Counterfactual]
 
         do {
             let raw = try await appState.causalityEngine.querySymptom(userMessage)
