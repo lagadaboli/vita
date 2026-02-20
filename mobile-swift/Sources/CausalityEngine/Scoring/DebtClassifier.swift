@@ -37,9 +37,11 @@ public struct DebtClassifier: Sendable {
             .somatic: 0.34,
         ]
 
-        // Shift priors based on hypothesis generation
+        // Shift priors based on hypothesis generation.
+        // Weight both the prior probability AND the hypothesis confidence so the
+        // classifier's normalized score stays aligned with the displayed confidence.
         for h in hypotheses {
-            scores[h.debtType, default: 0] += h.priorProbability * 0.2
+            scores[h.debtType, default: 0] += h.priorProbability * 0.2 + h.confidence * 0.3
         }
 
         // Accumulate evidence from tool observations

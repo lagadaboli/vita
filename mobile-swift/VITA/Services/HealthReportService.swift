@@ -229,7 +229,30 @@ struct HealthReportService {
 
         let sanitizedQuestion = context.question.trimmingCharacters(in: .whitespacesAndNewlines)
         let topExplanation = context.explanations.max(by: { $0.confidence < $1.confidence })
-        let likelyDriver = topExplanation?.causalChain.first ?? topExplanation?.symptom ?? "No dominant root cause detected yet"
+
+        // Use the full causal chain joined with arrows as the likely driver
+        let likelyDriver: String
+        if let top = topExplanation, !top.causalChain.isEmpty {
+            likelyDriver = top.causalChain.joined(separator: " → ")
+        } else {
+            likelyDriver = topExplanation?.symptom ?? "No dominant root cause detected yet"
+        }
+
+        // Load skin data for the PDF — don't leave it as "Not analyzed" if we have a scan
+        let skinAnalysis = try? appState.healthGraph.queryLatestSkinAnalysis()
+        let skinScoreValue: String
+        let skinConditionSummary: [String]
+        if let skin = skinAnalysis {
+            skinScoreValue = "\(skin.overallScore)/100"
+            skinConditionSummary = skin.conditions.map { c in
+                let sev = c.rawScore > 0.65 ? "Severe" : c.rawScore > 0.35 ? "Moderate" : "Mild"
+                return "\(c.type.replacingOccurrences(of: "_", with: " ").capitalized): \(sev) (\(c.uiScore)/100)"
+            }
+        } else {
+            skinScoreValue = "No scan available"
+            skinConditionSummary = ["Run a Skin Audit scan to include dermatology signals in future reports."]
+        }
+
         let summary = buildAskVITASummary(
             question: sanitizedQuestion,
             dashboard: dashboard,
@@ -250,17 +273,17 @@ struct HealthReportService {
             fallback: "No strong signal available yet."
         )
         let mealLines = paddedLines(
-            from: meals.map { "\($0.meal) (\($0.source)) - GL \($0.glycemicLoad), \($0.impact)" },
+            from: meals.map { "\($0.meal) (\($0.source))  ·  GL \($0.glycemicLoad)  ·  \($0.impact)" },
             count: 3,
             fallback: "No meal insight available."
         )
         let skinLines = paddedLines(
-            from: ["Skin analysis was not requested in this Ask VITA report.", "Use Skin Scan to include dermatology signals."],
+            from: skinConditionSummary,
             count: 2,
-            fallback: "No skin insight available."
+            fallback: "No skin data available."
         )
         let causalLines = paddedLines(
-            from: causalRows.map { "\($0.finding): \($0.detail)" },
+            from: causalRows.map { "\($0.finding)  ·  \($0.detail)  [Source: \($0.source)]" },
             count: 3,
             fallback: "No causal finding available."
         )
@@ -277,21 +300,21 @@ struct HealthReportService {
             aiSummaryTitle: summary.title,
             aiSummaryBody: summary.body,
             confidenceBand: summary.confidenceBand,
-            likelyReason: summary.likelyReason,
+            likelyReason: likelyDriver,
             supportingEvidence: summary.supportingEvidence,
             nextBestAction: summary.nextBestAction,
-            primaryConcern: sanitizedQuestion.isEmpty ? "User asked for root-cause analysis" : sanitizedQuestion,
+            primaryConcern: sanitizedQuestion.isEmpty ? "Root-cause analysis" : sanitizedQuestion,
             sleepQuality: sleepQuality(hours: dashboard.sleepHours),
             digestiveIssues: digestiveSummary(question: sanitizedQuestion, explanations: context.explanations),
             exerciseFrequency: exerciseFrequency(steps: dashboard.steps),
-            providerGoal: "Likely driver: \(likelyDriver)",
+            providerGoal: "Likely driver: \(topExplanation?.causalChain.first ?? likelyDriver)",
             healthScore: String(format: "%.0f", dashboard.healthScore),
             hrv: "\(Int(dashboard.currentHRV.rounded())) ms",
             heartRate: "\(Int(dashboard.currentHR.rounded())) bpm",
             glucose: "\(Int(dashboard.currentGlucose.rounded())) mg/dL",
             sleepHours: String(format: "%.1f hrs", dashboard.sleepHours),
             steps: formattedSteps(dashboard.steps),
-            skinScore: "Not analyzed",
+            skinScore: skinScoreValue,
             topSignal1: topSignalLines[0],
             topSignal2: topSignalLines[1],
             topSignal3: topSignalLines[2],
@@ -469,30 +492,40 @@ struct HealthReportService {
     ) -> AISummaryContent {
         let safeQuestion = question.isEmpty ? "your recent symptom" : question
         let topExplanation = explanations.max(by: { $0.confidence < $1.confidence })
-        let topNarrative = topExplanation?.narrative.trimmingCharacters(in: .whitespacesAndNewlines) ?? "No high-confidence causal narrative was returned."
-        let clippedNarrative = clipped(topNarrative, limit: 220)
+        let topNarrative = topExplanation?.narrative.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         let confidence = Int(((topExplanation?.confidence ?? 0.42) * 100).rounded())
-        let confidenceBand = confidenceBand(from: "\(confidence)%")
 
-        let topMealImpact = mealRows.first(where: { $0.impact.lowercased().contains("high spike") })?.impact
-            ?? mealRows.first?.impact
-            ?? "No strong glucose spike observed"
+        // Derive confidence band directly from the Double — no string parsing
+        let band: String
+        if confidence >= 75 { band = "High confidence (\(confidence)%)" }
+        else if confidence >= 55 { band = "Moderate confidence (\(confidence)%)" }
+        else { band = "Early signal — more data needed (\(confidence)%)" }
+
         let sleepBand = sleepQuality(hours: dashboard.sleepHours)
+        let hrvStr = "\(Int(dashboard.currentHRV.rounded())) ms"
+        let glucoseStr = "\(Int(dashboard.currentGlucose.rounded())) mg/dL"
+
+        // Summary body: narrative + brief vitals context
+        let narrativeClip = topNarrative.isEmpty ? "Causal analysis identified \(likelyDriver) as the primary driver." : clipped(topNarrative, limit: 280)
+        let bodyText = "\(narrativeClip) Sleep quality is \(sleepBand.lowercased()) at \(String(format: "%.1f", dashboard.sleepHours)) hours. HRV: \(hrvStr). Glucose: \(glucoseStr)."
 
         let nextAction: String
-        if let strongestCounterfactual = counterfactuals.sorted(by: { $0.impact > $1.impact }).first {
-            let impact = Int((strongestCounterfactual.impact * 100).rounded())
-            nextAction = "\(strongestCounterfactual.description) (estimated impact \(impact)%)"
+        if let strongest = counterfactuals.sorted(by: { $0.impact > $1.impact }).first {
+            let impact = Int((strongest.impact * 100).rounded())
+            let conf = Int((strongest.confidence * 100).rounded())
+            nextAction = "\(strongest.description)  ·  \(impact)% estimated impact  ·  \(conf)% confidence  ·  Effort: \(strongest.effort.rawValue)"
         } else {
             nextAction = "Track meals, sleep, and symptom timing for 7 days, then rerun Ask VITA."
         }
 
+        let supportingEvidence = "Confidence: \(confidence)%  ·  Sleep: \(String(format: "%.1f", dashboard.sleepHours)) hrs (\(sleepBand))  ·  HRV: \(hrvStr)  ·  Glucose: \(glucoseStr)  ·  Health Score: \(Int(dashboard.healthScore.rounded()))/100"
+
         return AISummaryContent(
-            title: "AI-Generated Summary for \"\(safeQuestion)\"",
-            body: "\(clippedNarrative) Sleep appears \(sleepBand.lowercased()) and meal-linked glucose response suggests: \(topMealImpact).",
-            confidenceBand: confidenceBand,
+            title: "VITA Analysis: \"\(safeQuestion)\"",
+            body: bodyText,
+            confidenceBand: band,
             likelyReason: likelyDriver,
-            supportingEvidence: "Top explanation confidence: \(confidence)% | Sleep: \(String(format: "%.1f", dashboard.sleepHours)) hrs | HRV: \(Int(dashboard.currentHRV.rounded())) ms | Glucose: \(Int(dashboard.currentGlucose.rounded())) mg/dL",
+            supportingEvidence: supportingEvidence,
             nextBestAction: nextAction
         )
     }
@@ -656,16 +689,23 @@ struct HealthReportService {
             ]
         }
 
-        return explanations.prefix(5).map { explanation in
-            let finding = explanation.causalChain.first ?? explanation.symptom
-            let narrative = explanation.narrative.trimmingCharacters(in: .whitespacesAndNewlines)
-            let clippedNarrative = narrative.count > 220 ? "\(narrative.prefix(220))..." : narrative
+        return explanations.prefix(3).map { explanation in
+            // Show the full causal chain as "A → B → C" — matches what the chat displays
+            let chain = explanation.causalChain.isEmpty
+                ? explanation.symptom
+                : explanation.causalChain.joined(separator: " → ")
             let confidence = Int((explanation.confidence * 100).rounded())
             let source = inferSource(from: explanation)
 
+            // Use the engine narrative as the detail; clip to 240 chars to fit comfortably
+            let narrative = explanation.narrative.trimmingCharacters(in: .whitespacesAndNewlines)
+            let detail = narrative.isEmpty
+                ? "Confidence: \(confidence)%"
+                : (narrative.count > 240 ? "\(narrative.prefix(240))…" : narrative) + "  [\(confidence)% confidence]"
+
             return DocumentValues.CausalFindingRow(
-                finding: finding,
-                detail: "\(clippedNarrative) (confidence \(confidence)%)",
+                finding: chain,
+                detail: detail,
                 source: source
             )
         }
@@ -705,12 +745,13 @@ struct HealthReportService {
 
         return counterfactuals
             .sorted(by: { $0.impact > $1.impact })
-            .prefix(5)
+            .prefix(3)
             .map { item in
                 let impact = Int((item.impact * 100).rounded())
-                let confidence = Int((item.confidence * 100).rounded())
+                let conf   = Int((item.confidence * 100).rounded())
+                // Format exactly like the chat UI counterfactual card: description + impact + effort + confidence
                 return DocumentValues.RecommendationRow(
-                    rec: "\(item.description) (impact \(impact)%, confidence \(confidence)%)"
+                    rec: "\(item.description)  ·  Impact: \(impact)%  ·  Effort: \(item.effort.rawValue)  ·  Confidence: \(conf)%"
                 )
             }
     }

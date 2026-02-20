@@ -619,32 +619,42 @@ public enum SampleDataScenarios {
 
     // MARK: - Helpers
 
+    // Fixed per-slot offsets — deterministic so data never shifts on refresh.
+    // HRV slots: hours 6,8,10,12,14,16,18,20,22 (9 slots)
+    private static let hrvOffsets: [Double] = [+2, -3, +4, +1, -2, +3, -1, +2, -4]
+    // HR slots: hours 6,9,12,15,18,21 (6 slots)
+    private static let hrOffsets:  [Double] = [+3, +6, +2, +5, +1, +4]
+
     private static func generateHRVSamples(baseline: Double, stressHours: [Int], suppressionPercent: Double) -> [MetricTemplate] {
         var samples: [MetricTemplate] = []
-        // Sample every 2 hours from 6am to midnight
+        var slotIndex = 0
         for hour in stride(from: 6, through: 23, by: 2) {
             let suppressed = stressHours.contains(hour)
-            let value = suppressed ? baseline * (1.0 - suppressionPercent / 100.0) : baseline + Double.random(in: -5...5)
+            let offset = hrvOffsets[slotIndex % hrvOffsets.count]
+            let value = suppressed ? baseline * (1.0 - suppressionPercent / 100.0) : baseline + offset
             samples.append(MetricTemplate(
                 hourOffset: Double(hour),
                 metricType: .hrvSDNN,
                 value: max(value, 20),
                 unit: "ms"
             ))
+            slotIndex += 1
         }
         return samples
     }
 
     private static func generateHRSamples(resting: Double) -> [MetricTemplate] {
         var samples: [MetricTemplate] = []
+        var slotIndex = 0
         for hour in stride(from: 6, through: 23, by: 3) {
-            let variation = Double.random(in: -4...8)
+            let variation = hrOffsets[slotIndex % hrOffsets.count]
             samples.append(MetricTemplate(
                 hourOffset: Double(hour),
                 metricType: .restingHeartRate,
                 value: resting + variation,
                 unit: "bpm"
             ))
+            slotIndex += 1
         }
         return samples
     }

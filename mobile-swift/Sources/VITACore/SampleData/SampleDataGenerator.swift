@@ -163,11 +163,17 @@ public final class SampleDataGenerator: Sendable {
         return readings
     }
 
+    // Fixed fasting glucose values per 15-min slot (5am→7am = 9 slots).
+    // Deterministic so the baseline never shifts on refresh.
+    private static let fastingGlucoseValues: [Double] = [88, 91, 85, 89, 87, 92, 86, 90, 83]
+
     private func generateFastingBaseline(dayStart: Date) throws {
         // Early morning fasting readings: 5am - 7am, every 15 min
+        var slotIndex = 0
         for minuteOffset in stride(from: 300, through: 420, by: 15) {
             let timestamp = dayStart.addingTimeInterval(TimeInterval(minuteOffset * 60))
-            let value = Double.random(in: 82...95)
+            let value = Self.fastingGlucoseValues[slotIndex % Self.fastingGlucoseValues.count]
+            slotIndex += 1
             var reading = GlucoseReading(
                 glucoseMgDL: value,
                 timestamp: timestamp,

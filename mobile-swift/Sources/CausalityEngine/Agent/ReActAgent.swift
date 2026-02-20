@@ -106,33 +106,45 @@ public struct ReActAgent: Sendable {
 
         // Metabolic hypothesis: glucose crash or high GL meals detected
         let hasCrash = glucose.contains { $0.energyState == .crashing || $0.energyState == .reactiveLow }
-        let hasHighGLMeal = meals.contains {
-            ($0.estimatedGlycemicLoad ?? $0.computedGlycemicLoad) > 25
-        }
+        let highGLMeals = meals.filter { ($0.estimatedGlycemicLoad ?? $0.computedGlycemicLoad) > 25 }
+        let hasHighGLMeal = !highGLMeals.isEmpty
+        let maxGL = highGLMeals.compactMap { $0.estimatedGlycemicLoad ?? $0.computedGlycemicLoad }.max() ?? 0
+
         if hasCrash || hasHighGLMeal {
             var chain = [String]()
-            if let meal = meals.last { chain.append("Meal (\(meal.source.rawValue))") }
+            if let meal = meals.last {
+                let gl = meal.estimatedGlycemicLoad ?? meal.computedGlycemicLoad
+                let mealName = meal.ingredients.first?.name ?? meal.source.rawValue
+                chain.append("\(mealName) (GL \(Int(gl)))")
+            }
             if hasCrash { chain.append("Glucose crash detected") }
             if !hrv.isEmpty {
                 let avgHRV = hrv.map(\.value).reduce(0, +) / Double(hrv.count)
                 chain.append("HRV: \(Int(avgHRV))ms")
             }
 
+            // Confidence reflects signal strength: crash is definitive (0.76),
+            // very high GL (>35) is strong (0.68), moderate high GL (>25) is moderate (0.58).
+            let metabolicConfidence: Double
+            if hasCrash { metabolicConfidence = 0.76 }
+            else if maxGL > 35 { metabolicConfidence = 0.68 }
+            else { metabolicConfidence = 0.58 }
+
             hypotheses.append(Hypothesis(
                 debtType: .metabolic,
                 description: "Post-meal glucose crash or high glycemic load",
-                confidence: hasCrash ? 0.55 : 0.4,
+                confidence: metabolicConfidence,
                 causalChain: chain,
-                supportingEvidence: hasCrash ? ["Glucose crash detected in window"] : ["High-GL meal detected"],
-                priorProbability: 0.4
+                supportingEvidence: hasCrash ? ["Glucose crash detected in window"] : ["High-GL meal (GL \(Int(maxGL))) detected"],
+                priorProbability: 0.45
             ))
         } else if !meals.isEmpty {
             hypotheses.append(Hypothesis(
                 debtType: .metabolic,
                 description: "Meal-related metabolic impact",
-                confidence: 0.25,
+                confidence: 0.40,
                 causalChain: ["Meals detected, no crash"],
-                priorProbability: 0.25
+                priorProbability: 0.30
             ))
         }
 
@@ -144,24 +156,27 @@ public struct ReActAgent: Sendable {
             let totalMinutes = passiveEvents.reduce(0.0) { $0 + $1.duration / 60.0 }
             let maxDebt = passiveEvents.compactMap(\.dopamineDebtScore).max() ?? 0
 
+            // Scale confidence with screen time: 30min→0.52, 60min→0.62, 120min→0.75 (cap 0.80)
+            let digitalConfidence = min(0.45 + totalMinutes / 200.0, 0.80)
+
             hypotheses.append(Hypothesis(
                 debtType: .digital,
                 description: "Passive screen time and dopamine debt",
-                confidence: min(totalMinutes / 60.0, 0.5),
+                confidence: digitalConfidence,
                 causalChain: ["\(Int(totalMinutes))min passive screen time", "Dopamine debt: \(Int(maxDebt))"],
-                supportingEvidence: ["\(passiveEvents.count) passive events"],
-                priorProbability: 0.3
+                supportingEvidence: ["\(passiveEvents.count) passive events, \(Int(totalMinutes)) total minutes"],
+                priorProbability: 0.35
             ))
         }
 
         // Somatic hypothesis: environmental stress, sleep deficit, or calendar overload
-        let hasSleepDeficit = sleep.isEmpty || sleep.map(\.value).reduce(0, +) < 6.5
+        let totalSleep = sleep.map(\.value).reduce(0, +)
+        let hasSleepDeficit = sleep.isEmpty || totalSleep < 7.0
         let hasEnvStress = environment.contains { $0.aqiUS > 100 || $0.pollenIndex >= 8 || $0.temperatureCelsius > 33 }
         if hasSleepDeficit || hasEnvStress {
             var chain = [String]()
             if hasSleepDeficit {
-                let hours = sleep.map(\.value).reduce(0, +)
-                chain.append("Sleep: \(String(format: "%.1f", hours))h")
+                chain.append("Sleep: \(String(format: "%.1f", totalSleep))h")
             }
             if hasEnvStress {
                 if let env = environment.last {
@@ -169,14 +184,59 @@ public struct ReActAgent: Sendable {
                 }
             }
 
+            // Both factors → stronger signal (0.70), single factor is still meaningful (0.55)
+            let somaticConfidence: Double = (hasSleepDeficit && hasEnvStress) ? 0.70 : 0.55
+
             hypotheses.append(Hypothesis(
                 debtType: .somatic,
                 description: "Environmental or sleep-related stress",
-                confidence: (hasSleepDeficit && hasEnvStress) ? 0.5 : 0.35,
+                confidence: somaticConfidence,
                 causalChain: chain,
-                supportingEvidence: hasSleepDeficit ? ["Sleep deficit detected"] : ["Environmental stress detected"],
-                priorProbability: 0.3
+                supportingEvidence: hasSleepDeficit ? ["Sleep deficit: \(String(format: "%.1f", totalSleep))h"] : ["Environmental stress detected"],
+                priorProbability: 0.35
             ))
+        }
+
+        // Skin hypothesis: when the question is about a skin condition, boost the
+        // most relevant debt type with a skin-specific chain and high confidence
+        // so the causal cards are meaningful and Gemini gets clear direction.
+        let skinKeywords = ["skin", "acne", "pimple", "dark circle", "eye bag", "oily", "oiliness",
+                            "pore", "wrinkle", "redness", "complexion", "face", "breakout", "pigment",
+                            "spot", "texture", "dry skin", "hydration"]
+        let symptomLower = symptom.lowercased()
+        if skinKeywords.contains(where: { symptomLower.contains($0) }) {
+            // Build a skin-specific chain using the data we already have
+            var skinChain = [String]()
+            if hasHighGLMeal { skinChain.append("High-GL meal (GL \(Int(maxGL))) → IGF-1 spike → sebum overproduction") }
+            let totalSleepForSkin = sleep.map(\.value).reduce(0, +)
+            if totalSleepForSkin < 7.0 { skinChain.append("Sleep \(String(format: "%.1f", totalSleepForSkin))h → cortisol elevation → skin inflammation") }
+            if let env = environment.last, env.aqiUS > 80 { skinChain.append("AQI \(env.aqiUS) → oxidative stress → barrier disruption") }
+            if skinChain.isEmpty { skinChain.append("Lifestyle factors → skin condition") }
+
+            // Skin acne/oiliness is metabolic (IGF-1 driven); dark circles are somatic (sleep driven)
+            let skinDebt: DebtType
+            let darkCircleKeywords = ["dark circle", "eye bag", "dark eye", "puffy eye"]
+            if darkCircleKeywords.contains(where: { symptomLower.contains($0) }) {
+                skinDebt = .somatic
+            } else {
+                skinDebt = hasHighGLMeal ? .metabolic : .somatic
+            }
+
+            // Only add if not already covered with a higher-confidence hypothesis
+            let existingForDebt = hypotheses.first(where: { $0.debtType == skinDebt })
+            let skinConfidence: Double = hasHighGLMeal && hasSleepDeficit ? 0.78 : hasHighGLMeal ? 0.72 : 0.62
+            if (existingForDebt?.confidence ?? 0) < skinConfidence {
+                // Replace or append
+                hypotheses.removeAll { $0.debtType == skinDebt }
+                hypotheses.append(Hypothesis(
+                    debtType: skinDebt,
+                    description: "Skin condition driven by \(skinDebt == .metabolic ? "dietary/metabolic" : "sleep/stress") factors",
+                    confidence: skinConfidence,
+                    causalChain: skinChain,
+                    supportingEvidence: ["Skin-related question detected"],
+                    priorProbability: 0.45
+                ))
+            }
         }
 
         // Ensure we always have at least one hypothesis per debt type
@@ -185,8 +245,8 @@ public struct ReActAgent: Sendable {
             hypotheses.append(Hypothesis(
                 debtType: type,
                 description: "No strong indicators for \(type.rawValue) debt",
-                confidence: 0.1,
-                priorProbability: 0.1
+                confidence: 0.15,
+                priorProbability: 0.15
             ))
         }
 

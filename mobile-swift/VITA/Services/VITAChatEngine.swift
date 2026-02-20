@@ -30,6 +30,13 @@ struct VITAChatEngine: Sendable {
         let activatedSources: Set<String>
     }
 
+    // Keywords that indicate a skin-related question
+    private static let skinQuestionKeywords = [
+        "skin", "acne", "pimple", "dark circle", "eye bag", "oily", "oiliness",
+        "pore", "wrinkle", "redness", "complexion", "face", "breakout", "pigment",
+        "spot", "texture", "dry skin", "hydration", "skin scan", "skin score"
+    ]
+
     static func processMessage(
         userMessage: String,
         history: [ChatMessage],
@@ -40,6 +47,7 @@ struct VITAChatEngine: Sendable {
         let windowStart = now.addingTimeInterval(-6 * 3_600)
         // Skin analysis looks back 7 days (conditions don't change hour-to-hour)
         let skinWindowStart = now.addingTimeInterval(-7 * 24 * 3_600)
+        let isSkinQuestion = skinQuestionKeywords.contains(where: { userMessage.lowercased().contains($0) })
 
         // ── Step 1: Causal Analysis ────────────────────────────────────────────
         var explanations: [CausalExplanation]
@@ -67,7 +75,8 @@ struct VITAChatEngine: Sendable {
             explanations: explanations,
             glucosePoints: glucosePoints,
             mealPoints: mealPoints,
-            skinAnalysis: latestSkinForSources
+            skinAnalysis: latestSkinForSources,
+            isSkinQuestion: isSkinQuestion
         )
 
         // ── Step 3: Gemini or fallback ─────────────────────────────────────────
@@ -92,6 +101,10 @@ struct VITAChatEngine: Sendable {
 
         // ── Step 4: Build system prompt with full health context ───────────────
         let latestSkinAnalysis = try? appState.healthGraph.queryLatestSkinAnalysis()
+        // For skin questions, load full scan history so Gemini can discuss trends
+        let allSkinScans: [SkinAnalysisRecord] = isSkinQuestion
+            ? (try? appState.healthGraph.querySkinAnalyses(from: skinWindowStart, to: now)) ?? []
+            : []
         let systemPrompt = buildSystemPrompt(
             appState: appState,
             windowStart: windowStart,
@@ -100,7 +113,9 @@ struct VITAChatEngine: Sendable {
             mealPoints: mealPoints,
             explanations: explanations,
             counterfactuals: counterfactuals,
-            skinAnalysis: latestSkinAnalysis
+            skinAnalysis: latestSkinAnalysis,
+            allSkinScans: allSkinScans,
+            isSkinQuestion: isSkinQuestion
         )
 
         // ── Step 5: Map conversation history → Gemini format ──────────────────
@@ -136,7 +151,9 @@ struct VITAChatEngine: Sendable {
         mealPoints: [MealAnnotationPoint],
         explanations: [CausalExplanation],
         counterfactuals: [Counterfactual],
-        skinAnalysis: SkinAnalysisRecord? = nil
+        skinAnalysis: SkinAnalysisRecord? = nil,
+        allSkinScans: [SkinAnalysisRecord] = [],
+        isSkinQuestion: Bool = false
     ) -> String {
         let timeFmt = DateFormatter()
         timeFmt.dateStyle = .none
@@ -160,7 +177,15 @@ struct VITAChatEngine: Sendable {
         • Suggest 1-2 concrete, evidence-backed interventions grounded in all data sources.
         • In multi-turn conversations, reference what was said before and build on it.
         • Keep each response to 2-4 focused paragraphs. Never fabricate data — only use what's in the sections below.
-        • End responses with a brief follow-up prompt to encourage continued exploration.
+        • End responses with a brief follow-up prompt to encourage continued exploration.\(isSkinQuestion ? """
+
+        SKIN QUESTION DETECTED — SPECIAL INSTRUCTIONS:
+        • The user is asking about their skin. You MUST reference the skin scan data below directly.
+        • Use the overall skin score, specific condition names, severity levels, and raw scores in your answer.
+        • Trace the skin condition back to its root cause using the causal chain: what they ate (high-GL meals → IGF-1 → sebum), how they slept (sleep deficit → cortisol → periorbital inflammation), or environmental factors (AQI → NF-κB → skin barrier disruption).
+        • If multiple scans are available, comment on the trend — is the skin improving or declining?
+        • Always end with 2 specific, actionable interventions tied directly to the root cause you identified.
+        """ : "")
 
         DATA WINDOW: \(windowFmt.string(from: windowStart)) → \(windowFmt.string(from: windowEnd))
 
@@ -213,13 +238,33 @@ struct VITAChatEngine: Sendable {
             p += "\n━━ INTEGRATIONS (30-DAY LOCAL HISTORY) ━━\n\(integrationSummary)\n"
         }
 
-        // Skin Analysis (PerfectCorp YouCam — most recent scan)
+        // Skin Analysis (PerfectCorp YouCam AI)
         p += "\n━━ SKIN ANALYSIS (PerfectCorp YouCam AI) ━━\n"
+        let skinFmt = DateFormatter()
+        skinFmt.dateStyle = .medium
+        skinFmt.timeStyle = .none
+
         if let skin = skinAnalysis {
-            let skinFmt = DateFormatter()
-            skinFmt.dateStyle = .short
-            skinFmt.timeStyle = .short
-            p += "  Scan date: \(skinFmt.string(from: skin.timestamp))\n"
+            // Show 7-day scan history as a trend when we have multiple scans
+            let scansToShow = allSkinScans.isEmpty ? [skin] : allSkinScans.sorted { $0.timestamp < $1.timestamp }
+            if scansToShow.count > 1 {
+                p += "  SCAN HISTORY (\(scansToShow.count) scans — most recent last):\n"
+                for scan in scansToShow {
+                    p += "    \(skinFmt.string(from: scan.timestamp)): overall score \(scan.overallScore)/100"
+                    let conds = scan.conditions.map { c -> String in
+                        let sev = c.rawScore > 0.65 ? "severe" : c.rawScore > 0.35 ? "moderate" : "mild"
+                        return "\(c.type) (\(sev))"
+                    }.joined(separator: ", ")
+                    if !conds.isEmpty { p += " — \(conds)" }
+                    p += "\n"
+                }
+                let first = scansToShow.first!.overallScore
+                let last  = scansToShow.last!.overallScore
+                let trend = last > first ? "↑ improving (+\(last - first) pts)" : last < first ? "↓ declining (\(last - first) pts)" : "→ stable"
+                p += "  7-day trend: \(trend)\n"
+            }
+
+            p += "\n  LATEST SCAN (\(skinFmt.string(from: skin.timestamp))):\n"
             p += "  Overall skin score: \(skin.overallScore)/100\n"
             let conditions = skin.conditions
             if conditions.isEmpty {
@@ -229,29 +274,37 @@ struct VITAChatEngine: Sendable {
                     let label = c.rawScore > 0.65 ? "Severe" : c.rawScore > 0.35 ? "Moderate" : "Mild"
                     p += "  • \(c.type): \(label) (score \(c.uiScore)/100, raw \(String(format: "%.2f", c.rawScore)))\n"
                 }
-                // Cross-domain causal hints for the AI
+
+                // Cross-domain causal hints — always included, richer for skin questions
                 p += "\n  CROSS-DOMAIN REASONING HINTS:\n"
-                let hasAcne       = conditions.contains { $0.type == "acne" }
+                let hasAcne        = conditions.contains { $0.type == "acne" }
                 let hasDarkCircles = conditions.contains { $0.type == "dark_circle_v2" || $0.type == "eye_bag" }
-                let hasRedness    = conditions.contains { $0.type == "redness" }
-                let hasOiliness   = conditions.contains { $0.type == "oiliness" }
+                let hasRedness     = conditions.contains { $0.type == "redness" }
+                let hasOiliness    = conditions.contains { $0.type == "oiliness" }
+                let hasPores       = conditions.contains { $0.type == "pore" }
+                let hasWrinkle     = conditions.contains { $0.type == "wrinkle" }
+
                 if hasDarkCircles {
-                    p += "  ▸ Dark circles/eye bags + poor sleep data → may explain fatigue or headaches (shared root: sleep deprivation → cortisol → periorbital inflammation + systemic inflammation).\n"
-                    p += "  ▸ Dark circles + late meals + low HRV → headache risk elevated (glycemic crash after late eating → impaired sleep → HRV suppression → tension headache via vascular inflammation).\n"
+                    p += "  ▸ Dark circles/eye bags + poor sleep → cortisol elevation → periorbital inflammation. Trace back to late meals keeping glucose elevated overnight → delayed sleep onset → shortened REM.\n"
+                    p += "  ▸ Dark circles + low HRV → both are outputs of the same cortisol/autonomic stress signal. Address the root (late eating, screen time) to improve both simultaneously.\n"
                 }
                 if hasAcne {
-                    p += "  ▸ Acne + high-GL meals → insulin spike cascade affects both skin (sebum) and energy levels (reactive hypoglycemia).\n"
-                    p += "  ▸ Acne + gut inflammation (slow-cook lectin retention) → gut-skin axis; same inflammation may cause bloating or brain fog.\n"
+                    p += "  ▸ Acne + high-GL meals → insulin/IGF-1 spike → sebaceous gland overactivation (48h lag). Identify the specific high-GL meal in the data.\n"
+                    p += "  ▸ Acne + slow-cook legumes (Instant Pot slow mode) → gut-skin axis: ~40% lectins surviving → gut inflammation → systemic NF-κB → skin flare.\n"
+                    p += "  ▸ Acne severity closely mirrors glucose volatility. Reference glucose chart when explaining acne triggers.\n"
+                }
+                if hasOiliness || hasPores {
+                    p += "  ▸ Oiliness/pores + high-GI diet → same insulin/androgen pathway that drives energy crashes also drives sebum overproduction.\n"
                 }
                 if hasRedness {
-                    p += "  ▸ Skin redness + high AQI → systemic NF-κB inflammation; may also contribute to respiratory symptoms or fatigue.\n"
+                    p += "  ▸ Skin redness + high AQI → NF-κB inflammatory cascade; also look for correlated HRV suppression on high-AQI days.\n"
                 }
-                if hasOiliness {
-                    p += "  ▸ Oiliness + high-GI diet → same insulin/androgen pathway causing energy crashes; look for correlated glucose spikes.\n"
+                if hasWrinkle {
+                    p += "  ▸ Wrinkles + chronic sleep deficit → cortisol inhibits collagen synthesis. UV index in environment data may also be contributing.\n"
                 }
             }
         } else {
-            p += "  No skin analysis data available yet. User can run a scan in the Skin Audit tab.\n"
+            p += "  No skin analysis data available yet. Suggest the user run a scan in the Skin Audit tab.\n"
         }
 
         // Causal Analysis from ReAct engine
@@ -375,12 +428,13 @@ struct VITAChatEngine: Sendable {
         explanations: [CausalExplanation],
         glucosePoints: [GlucoseDataPoint],
         mealPoints: [MealAnnotationPoint],
-        skinAnalysis: SkinAnalysisRecord? = nil
+        skinAnalysis: SkinAnalysisRecord? = nil,
+        isSkinQuestion: Bool = false
     ) -> Set<String> {
         var sources = Set<String>()
         if !glucosePoints.isEmpty { sources.insert("Glucose") }
         if !mealPoints.isEmpty { sources.insert("Meals") }
-        if skinAnalysis != nil { sources.insert("Skin") }
+        if skinAnalysis != nil || isSkinQuestion { sources.insert("Skin") }
 
         let chainText = explanations.flatMap(\.causalChain).joined(separator: " ").lowercased()
         if chainText.contains("hrv") || chainText.contains("heart") { sources.insert("HRV") }

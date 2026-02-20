@@ -128,5 +128,47 @@ public enum DefaultRuleSet {
             recommendation: "Aim for GL below 25 per meal. Switch to whole grains and add protein/fat.",
             confidence: 0.68
         ),
+
+        // Rule 10: Skin acne from high-GL diet (IGF-1 pathway)
+        BioRule(
+            id: "skin_acne_high_gl",
+            name: "Dietary Acne Trigger",
+            conditions: [
+                RuleCondition(.glAbove(30)),
+                RuleCondition(.hrvDropPercent(10)),
+            ],
+            conclusion: .metabolic,
+            explanation: "High-GL meals spike insulin-like growth factor 1 (IGF-1), which stimulates sebaceous glands to overproduce sebum — the primary driver of dietary acne. There is a 48-hour lag between the meal and the skin response.",
+            recommendation: "Reduce glycemic load to below 20 per meal. Swap refined carbs for whole grains and add protein/fat to every meal.",
+            confidence: 0.74
+        ),
+
+        // Rule 11: Skin dark circles from sleep deprivation + late meals
+        BioRule(
+            id: "skin_dark_circles_sleep",
+            name: "Sleep-Driven Dark Circles",
+            conditions: [
+                RuleCondition(.sleepBelow(hours: 7.0)),
+                RuleCondition(.glAbove(25)),
+            ],
+            conclusion: .somatic,
+            explanation: "High-GL late meals elevate overnight glucose, which delays sleep onset and suppresses deep sleep. Sleep deprivation raises cortisol, causing periorbital inflammation — visible as dark circles and eye bags.",
+            recommendation: "Eat dinner at least 2 hours before bed with GL below 20. Target 7.5+ hours of sleep.",
+            confidence: 0.72
+        ),
+
+        // Rule 12: Skin oiliness from high-GI diet + digital stress
+        BioRule(
+            id: "skin_oiliness_insulin",
+            name: "Insulin-Driven Oiliness",
+            conditions: [
+                RuleCondition(.glAbove(25)),
+                RuleCondition(.dopamineDebtAbove(40)),
+            ],
+            conclusion: .metabolic,
+            explanation: "High-GI foods and chronic digital stress both elevate androgens via the insulin-IGF-1 pathway, stimulating sebaceous glands. Oiliness and clogged pores are early signals of this cascade.",
+            recommendation: "Lower meal glycemic load and reduce passive screen time to below 30 minutes per session.",
+            confidence: 0.68
+        ),
     ]
 }

@@ -80,125 +80,437 @@ struct DocxTemplateBuilder {
     // swiftlint:disable line_length
     private static let documentXML = """
         <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-        <w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+        <w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"
+                    xmlns:w14="http://schemas.microsoft.com/office/word/2010/wordml">
           <w:body>
 
-            <!-- Title -->
-            <w:p>
-              <w:pPr><w:jc w:val="center"/></w:pPr>
-              <w:r><w:rPr><w:b/><w:sz w:val="50"/><w:color w:val="0F766E"/></w:rPr><w:t>VITA Health Pattern Report</w:t></w:r>
-            </w:p>
-            <w:p>
-              <w:pPr><w:jc w:val="center"/></w:pPr>
-              <w:r><w:rPr><w:i/><w:color w:val="666666"/></w:rPr><w:t>AI-assisted summary from Ask VITA and connected health records</w:t></w:r>
-            </w:p>
-
-            <!-- Metadata -->
-            <w:p><w:r><w:t xml:space="preserve">Report Date:  {{ reportDate }}</w:t></w:r></w:p>
-            <w:p><w:r><w:t xml:space="preserve">Report ID:    {{ reportId }}</w:t></w:r></w:p>
-            <w:p><w:r><w:t xml:space="preserve"> </w:t></w:r></w:p>
-
-            <!-- AI summary card -->
+            <!-- ═══════════════════════════════════════════════════════════════ -->
+            <!-- HEADER BAND                                                      -->
+            <!-- ═══════════════════════════════════════════════════════════════ -->
             <w:tbl>
               <w:tblPr>
                 <w:tblW w:w="5000" w:type="pct"/>
                 <w:tblBorders>
-                  <w:top w:val="single" w:sz="6" w:space="0" w:color="0F766E"/>
-                  <w:left w:val="single" w:sz="6" w:space="0" w:color="0F766E"/>
-                  <w:bottom w:val="single" w:sz="6" w:space="0" w:color="0F766E"/>
-                  <w:right w:val="single" w:sz="6" w:space="0" w:color="0F766E"/>
-                  <w:insideH w:val="single" w:sz="4" w:space="0" w:color="A7D8D4"/>
+                  <w:top w:val="none" w:sz="0"/><w:left w:val="none" w:sz="0"/>
+                  <w:bottom w:val="none" w:sz="0"/><w:right w:val="none" w:sz="0"/>
+                  <w:insideH w:val="none" w:sz="0"/><w:insideV w:val="none" w:sz="0"/>
                 </w:tblBorders>
+                <w:tblCellMar>
+                  <w:top w:w="160" w:type="dxa"/>
+                  <w:left w:w="180" w:type="dxa"/>
+                  <w:bottom w:w="160" w:type="dxa"/>
+                  <w:right w:w="180" w:type="dxa"/>
+                </w:tblCellMar>
               </w:tblPr>
               <w:tr>
                 <w:tc>
-                  <w:tcPr><w:shd w:val="clear" w:fill="EAF7F6"/></w:tcPr>
-                  <w:p><w:r><w:rPr><w:b/><w:color w:val="0F766E"/></w:rPr><w:t>{{ aiGeneratedLabel }} - {{ aiSummaryTitle }}</w:t></w:r></w:p>
-                  <w:p><w:r><w:t>{{ aiSummaryBody }}</w:t></w:r></w:p>
-                  <w:p><w:r><w:rPr><w:b/></w:rPr><w:t>Confidence:</w:t></w:r><w:r><w:t xml:space="preserve"> {{ confidenceBand }}</w:t></w:r></w:p>
-                  <w:p><w:r><w:rPr><w:b/></w:rPr><w:t>Most Likely Reason:</w:t></w:r><w:r><w:t xml:space="preserve"> {{ likelyReason }}</w:t></w:r></w:p>
-                  <w:p><w:r><w:rPr><w:b/></w:rPr><w:t>Supporting Evidence:</w:t></w:r><w:r><w:t xml:space="preserve"> {{ supportingEvidence }}</w:t></w:r></w:p>
-                  <w:p><w:r><w:rPr><w:b/></w:rPr><w:t>Next Best Action:</w:t></w:r><w:r><w:t xml:space="preserve"> {{ nextBestAction }}</w:t></w:r></w:p>
+                  <w:tcPr><w:shd w:val="clear" w:fill="0F766E"/><w:tcW w:w="3500" w:type="dxa"/></w:tcPr>
+                  <w:p><w:pPr><w:jc w:val="left"/></w:pPr>
+                    <w:r><w:rPr><w:b/><w:sz w:val="52"/><w:color w:val="FFFFFF"/></w:rPr><w:t>VITA</w:t></w:r>
+                    <w:r><w:rPr><w:sz w:val="22"/><w:color w:val="A7D8D4"/></w:rPr><w:t xml:space="preserve">  Personal Health Causality Engine</w:t></w:r>
+                  </w:p>
+                  <w:p><w:pPr><w:jc w:val="left"/></w:pPr>
+                    <w:r><w:rPr><w:sz w:val="18"/><w:color w:val="CCF0ED"/></w:rPr><w:t>Clinical Pattern Report  ·  AI Generated</w:t></w:r>
+                  </w:p>
+                </w:tc>
+                <w:tc>
+                  <w:tcPr><w:shd w:val="clear" w:fill="0D6560"/><w:tcW w:w="1500" w:type="dxa"/><w:vAlign w:val="center"/></w:tcPr>
+                  <w:p><w:pPr><w:jc w:val="right"/></w:pPr>
+                    <w:r><w:rPr><w:sz w:val="18"/><w:color w:val="A7D8D4"/></w:rPr><w:t>{{ reportDate }}</w:t></w:r>
+                  </w:p>
+                  <w:p><w:pPr><w:jc w:val="right"/></w:pPr>
+                    <w:r><w:rPr><w:sz w:val="16"/><w:color w:val="7BB8B4"/></w:rPr><w:t>{{ reportId }}</w:t></w:r>
+                  </w:p>
                 </w:tc>
               </w:tr>
             </w:tbl>
-            <w:p><w:r><w:t xml:space="preserve"> </w:t></w:r></w:p>
+            <w:p><w:pPr><w:spacing w:after="80"/></w:pPr></w:p>
 
-            <!-- Top signals -->
-            <w:p><w:r><w:rPr><w:b/><w:sz w:val="32"/><w:color w:val="0F766E"/></w:rPr><w:t>Top Signals Observed</w:t></w:r></w:p>
-            <w:p><w:r><w:rPr><w:b/></w:rPr><w:t>1.</w:t></w:r><w:r><w:t xml:space="preserve"> {{ topSignal1 }}</w:t></w:r></w:p>
-            <w:p><w:r><w:rPr><w:b/></w:rPr><w:t>2.</w:t></w:r><w:r><w:t xml:space="preserve"> {{ topSignal2 }}</w:t></w:r></w:p>
-            <w:p><w:r><w:rPr><w:b/></w:rPr><w:t>3.</w:t></w:r><w:r><w:t xml:space="preserve"> {{ topSignal3 }}</w:t></w:r></w:p>
-            <w:p><w:r><w:t xml:space="preserve"> </w:t></w:r></w:p>
-
-            <!-- Ask VITA context -->
-            <w:p><w:r><w:rPr><w:b/><w:sz w:val="32"/><w:color w:val="0F766E"/></w:rPr><w:t>Ask VITA Context</w:t></w:r></w:p>
-            <w:p><w:r><w:t xml:space="preserve">User Question:       {{ primaryConcern }}</w:t></w:r></w:p>
-            <w:p><w:r><w:t xml:space="preserve">Sleep Pattern:       {{ sleepQuality }}</w:t></w:r></w:p>
-            <w:p><w:r><w:t xml:space="preserve">Digestive Signal:    {{ digestiveIssues }}</w:t></w:r></w:p>
-            <w:p><w:r><w:t xml:space="preserve">Activity Pattern:    {{ exerciseFrequency }}</w:t></w:r></w:p>
-            <w:p><w:r><w:t xml:space="preserve">Likely Driver:       {{ providerGoal }}</w:t></w:r></w:p>
-            <w:p><w:r><w:t xml:space="preserve"> </w:t></w:r></w:p>
-
-            <!-- Health metrics -->
-            <w:p><w:r><w:rPr><w:b/><w:sz w:val="32"/><w:color w:val="0F766E"/></w:rPr><w:t>Health Metrics Snapshot</w:t></w:r></w:p>
+            <!-- ═══════════════════════════════════════════════════════════════ -->
+            <!-- USER QUESTION (prominent)                                        -->
+            <!-- ═══════════════════════════════════════════════════════════════ -->
             <w:tbl>
               <w:tblPr>
                 <w:tblW w:w="5000" w:type="pct"/>
                 <w:tblBorders>
-                  <w:top w:val="single" w:sz="4" w:space="0" w:color="BFBFBF"/>
-                  <w:left w:val="single" w:sz="4" w:space="0" w:color="BFBFBF"/>
-                  <w:bottom w:val="single" w:sz="4" w:space="0" w:color="BFBFBF"/>
-                  <w:right w:val="single" w:sz="4" w:space="0" w:color="BFBFBF"/>
-                  <w:insideH w:val="single" w:sz="4" w:space="0" w:color="D9D9D9"/>
-                  <w:insideV w:val="single" w:sz="4" w:space="0" w:color="D9D9D9"/>
+                  <w:top w:val="none" w:sz="0"/><w:bottom w:val="none" w:sz="0"/>
+                  <w:left w:val="single" w:sz="16" w:color="0F766E"/>
+                  <w:right w:val="none" w:sz="0"/>
+                  <w:insideH w:val="none" w:sz="0"/><w:insideV w:val="none" w:sz="0"/>
                 </w:tblBorders>
+                <w:tblCellMar><w:left w:w="200" w:type="dxa"/></w:tblCellMar>
               </w:tblPr>
-              <w:tr><w:tc><w:p><w:r><w:t>Metric</w:t></w:r></w:p></w:tc><w:tc><w:p><w:r><w:t>Value</w:t></w:r></w:p></w:tc></w:tr>
-              <w:tr><w:tc><w:p><w:r><w:t>Health Score</w:t></w:r></w:p></w:tc><w:tc><w:p><w:r><w:t>{{ healthScore }}/100</w:t></w:r></w:p></w:tc></w:tr>
-              <w:tr><w:tc><w:p><w:r><w:t>HRV</w:t></w:r></w:p></w:tc><w:tc><w:p><w:r><w:t>{{ hrv }}</w:t></w:r></w:p></w:tc></w:tr>
-              <w:tr><w:tc><w:p><w:r><w:t>Heart Rate</w:t></w:r></w:p></w:tc><w:tc><w:p><w:r><w:t>{{ heartRate }}</w:t></w:r></w:p></w:tc></w:tr>
-              <w:tr><w:tc><w:p><w:r><w:t>Glucose</w:t></w:r></w:p></w:tc><w:tc><w:p><w:r><w:t>{{ glucose }}</w:t></w:r></w:p></w:tc></w:tr>
-              <w:tr><w:tc><w:p><w:r><w:t>Sleep</w:t></w:r></w:p></w:tc><w:tc><w:p><w:r><w:t>{{ sleepHours }}</w:t></w:r></w:p></w:tc></w:tr>
-              <w:tr><w:tc><w:p><w:r><w:t>Steps</w:t></w:r></w:p></w:tc><w:tc><w:p><w:r><w:t>{{ steps }}</w:t></w:r></w:p></w:tc></w:tr>
-              <w:tr><w:tc><w:p><w:r><w:t>Skin Score</w:t></w:r></w:p></w:tc><w:tc><w:p><w:r><w:t>{{ skinScore }}</w:t></w:r></w:p></w:tc></w:tr>
+              <w:tr>
+                <w:tc>
+                  <w:tcPr><w:shd w:val="clear" w:fill="F4FCFB"/></w:tcPr>
+                  <w:p>
+                    <w:r><w:rPr><w:sz w:val="16"/><w:color w:val="5EA8A4"/></w:rPr><w:t>YOU ASKED</w:t></w:r>
+                  </w:p>
+                  <w:p>
+                    <w:r><w:rPr><w:b/><w:sz w:val="28"/><w:color w:val="1A1A1A"/></w:rPr><w:t>{{ primaryConcern }}</w:t></w:r>
+                  </w:p>
+                </w:tc>
+              </w:tr>
             </w:tbl>
-            <w:p><w:r><w:t xml:space="preserve"> </w:t></w:r></w:p>
+            <w:p><w:pPr><w:spacing w:after="120"/></w:pPr></w:p>
 
-            <!-- Recent meals -->
-            <w:p><w:r><w:rPr><w:b/><w:sz w:val="32"/><w:color w:val="0F766E"/></w:rPr><w:t>Recent Meals and Glucose Impact</w:t></w:r></w:p>
-            <w:p><w:r><w:rPr><w:b/></w:rPr><w:t>1.</w:t></w:r><w:r><w:t xml:space="preserve"> {{ mealInsight1 }}</w:t></w:r></w:p>
-            <w:p><w:r><w:rPr><w:b/></w:rPr><w:t>2.</w:t></w:r><w:r><w:t xml:space="preserve"> {{ mealInsight2 }}</w:t></w:r></w:p>
-            <w:p><w:r><w:rPr><w:b/></w:rPr><w:t>3.</w:t></w:r><w:r><w:t xml:space="preserve"> {{ mealInsight3 }}</w:t></w:r></w:p>
-            <w:p><w:r><w:t xml:space="preserve"> </w:t></w:r></w:p>
+            <!-- ═══════════════════════════════════════════════════════════════ -->
+            <!-- AI SUMMARY CARD                                                  -->
+            <!-- ═══════════════════════════════════════════════════════════════ -->
+            <w:p><w:r><w:rPr><w:b/><w:sz w:val="26"/><w:color w:val="0F766E"/></w:rPr><w:t>AI ANALYSIS SUMMARY</w:t></w:r></w:p>
+            <w:p><w:pPr><w:pBdr><w:bottom w:val="single" w:sz="4" w:color="0F766E"/></w:pBdr><w:spacing w:after="60"/></w:pPr></w:p>
+            <w:tbl>
+              <w:tblPr>
+                <w:tblW w:w="5000" w:type="pct"/>
+                <w:tblBorders>
+                  <w:top w:val="single" w:sz="4" w:color="A7D8D4"/>
+                  <w:left w:val="single" w:sz="4" w:color="A7D8D4"/>
+                  <w:bottom w:val="single" w:sz="4" w:color="A7D8D4"/>
+                  <w:right w:val="single" w:sz="4" w:color="A7D8D4"/>
+                  <w:insideH w:val="single" w:sz="2" w:color="D0EEEC"/>
+                  <w:insideV w:val="none" w:sz="0"/>
+                </w:tblBorders>
+                <w:tblCellMar>
+                  <w:top w:w="120" w:type="dxa"/>
+                  <w:left w:w="160" w:type="dxa"/>
+                  <w:bottom w:w="120" w:type="dxa"/>
+                  <w:right w:w="160" w:type="dxa"/>
+                </w:tblCellMar>
+              </w:tblPr>
+              <w:tr>
+                <w:tc>
+                  <w:tcPr><w:shd w:val="clear" w:fill="EAF7F6"/><w:tcW w:w="3600" w:type="dxa"/></w:tcPr>
+                  <w:p><w:r><w:rPr><w:b/><w:sz w:val="22"/><w:color w:val="0F766E"/></w:rPr><w:t>{{ aiSummaryTitle }}</w:t></w:r></w:p>
+                  <w:p><w:pPr><w:spacing w:before="60" w:after="60"/></w:pPr><w:r><w:rPr><w:sz w:val="20"/><w:color w:val="333333"/></w:rPr><w:t>{{ aiSummaryBody }}</w:t></w:r></w:p>
+                </w:tc>
+                <w:tc>
+                  <w:tcPr><w:shd w:val="clear" w:fill="D0EEEC"/><w:tcW w:w="1400" w:type="dxa"/></w:tcPr>
+                  <w:p><w:r><w:rPr><w:sz w:val="16"/><w:color w:val="5EA8A4"/></w:rPr><w:t>CONFIDENCE</w:t></w:r></w:p>
+                  <w:p><w:r><w:rPr><w:b/><w:sz w:val="22"/><w:color w:val="0F766E"/></w:rPr><w:t>{{ confidenceBand }}</w:t></w:r></w:p>
+                  <w:p><w:pPr><w:spacing w:before="120"/></w:pPr><w:r><w:rPr><w:sz w:val="16"/><w:color w:val="5EA8A4"/></w:rPr><w:t>SLEEP</w:t></w:r></w:p>
+                  <w:p><w:r><w:rPr><w:b/><w:sz w:val="20"/><w:color w:val="1A1A1A"/></w:rPr><w:t>{{ sleepQuality }}</w:t></w:r></w:p>
+                  <w:p><w:pPr><w:spacing w:before="120"/></w:pPr><w:r><w:rPr><w:sz w:val="16"/><w:color w:val="5EA8A4"/></w:rPr><w:t>ACTIVITY</w:t></w:r></w:p>
+                  <w:p><w:r><w:rPr><w:b/><w:sz w:val="20"/><w:color w:val="1A1A1A"/></w:rPr><w:t>{{ exerciseFrequency }}</w:t></w:r></w:p>
+                </w:tc>
+              </w:tr>
+              <w:tr>
+                <w:tc>
+                  <w:tcPr><w:shd w:val="clear" w:fill="EAF7F6"/><w:tcW w:w="3600" w:type="dxa"/></w:tcPr>
+                  <w:p><w:r><w:rPr><w:sz w:val="16"/><w:color w:val="5EA8A4"/></w:rPr><w:t>CAUSAL CHAIN IDENTIFIED</w:t></w:r></w:p>
+                  <w:p><w:r><w:rPr><w:b/><w:sz w:val="20"/><w:color w:val="1A1A1A"/></w:rPr><w:t>{{ likelyReason }}</w:t></w:r></w:p>
+                </w:tc>
+                <w:tc>
+                  <w:tcPr><w:shd w:val="clear" w:fill="D0EEEC"/><w:tcW w:w="1400" w:type="dxa"/></w:tcPr>
+                  <w:p><w:r><w:rPr><w:sz w:val="16"/><w:color w:val="5EA8A4"/></w:rPr><w:t>HEALTH SCORE</w:t></w:r></w:p>
+                  <w:p><w:r><w:rPr><w:b/><w:sz w:val="28"/><w:color w:val="0F766E"/></w:rPr><w:t>{{ healthScore }}/100</w:t></w:r></w:p>
+                </w:tc>
+              </w:tr>
+              <w:tr>
+                <w:tc><w:tcPr><w:gridSpan w:val="2"/><w:shd w:val="clear" w:fill="F4FCFB"/></w:tcPr>
+                  <w:p><w:r><w:rPr><w:sz w:val="16"/><w:color w:val="5EA8A4"/></w:rPr><w:t>NEXT BEST ACTION</w:t></w:r></w:p>
+                  <w:p><w:r><w:rPr><w:b/><w:sz w:val="20"/><w:color w:val="1A1A1A"/></w:rPr><w:t>{{ nextBestAction }}</w:t></w:r></w:p>
+                </w:tc>
+              </w:tr>
+            </w:tbl>
+            <w:p><w:pPr><w:spacing w:after="160"/></w:pPr></w:p>
 
-            <!-- Skin conditions -->
-            <w:p><w:r><w:rPr><w:b/><w:sz w:val="32"/><w:color w:val="0F766E"/></w:rPr><w:t>Skin Health Analysis</w:t></w:r></w:p>
-            <w:p><w:r><w:rPr><w:b/></w:rPr><w:t>1.</w:t></w:r><w:r><w:t xml:space="preserve"> {{ skinInsight1 }}</w:t></w:r></w:p>
-            <w:p><w:r><w:rPr><w:b/></w:rPr><w:t>2.</w:t></w:r><w:r><w:t xml:space="preserve"> {{ skinInsight2 }}</w:t></w:r></w:p>
-            <w:p><w:r><w:t xml:space="preserve"> </w:t></w:r></w:p>
+            <!-- ═══════════════════════════════════════════════════════════════ -->
+            <!-- HEALTH METRICS (4-column grid)                                   -->
+            <!-- ═══════════════════════════════════════════════════════════════ -->
+            <w:p><w:r><w:rPr><w:b/><w:sz w:val="26"/><w:color w:val="0F766E"/></w:rPr><w:t>HEALTH METRICS SNAPSHOT</w:t></w:r></w:p>
+            <w:p><w:pPr><w:pBdr><w:bottom w:val="single" w:sz="4" w:color="0F766E"/></w:pBdr><w:spacing w:after="60"/></w:pPr></w:p>
+            <w:tbl>
+              <w:tblPr>
+                <w:tblW w:w="5000" w:type="pct"/>
+                <w:tblBorders>
+                  <w:top w:val="single" w:sz="2" w:color="D9D9D9"/>
+                  <w:left w:val="none" w:sz="0"/>
+                  <w:bottom w:val="single" w:sz="2" w:color="D9D9D9"/>
+                  <w:right w:val="none" w:sz="0"/>
+                  <w:insideH w:val="single" w:sz="2" w:color="EFEFEF"/>
+                  <w:insideV w:val="single" w:sz="2" w:color="E0E0E0"/>
+                </w:tblBorders>
+                <w:tblCellMar>
+                  <w:top w:w="100" w:type="dxa"/>
+                  <w:left w:w="140" w:type="dxa"/>
+                  <w:bottom w:w="100" w:type="dxa"/>
+                  <w:right w:w="140" w:type="dxa"/>
+                </w:tblCellMar>
+              </w:tblPr>
+              <!-- Header row -->
+              <w:tr>
+                <w:tc><w:tcPr><w:shd w:val="clear" w:fill="0F766E"/></w:tcPr><w:p><w:r><w:rPr><w:b/><w:sz w:val="18"/><w:color w:val="FFFFFF"/></w:rPr><w:t>Metric</w:t></w:r></w:p></w:tc>
+                <w:tc><w:tcPr><w:shd w:val="clear" w:fill="0F766E"/></w:tcPr><w:p><w:r><w:rPr><w:b/><w:sz w:val="18"/><w:color w:val="FFFFFF"/></w:rPr><w:t>Value</w:t></w:r></w:p></w:tc>
+                <w:tc><w:tcPr><w:shd w:val="clear" w:fill="0F766E"/></w:tcPr><w:p><w:r><w:rPr><w:b/><w:sz w:val="18"/><w:color w:val="FFFFFF"/></w:rPr><w:t>Metric</w:t></w:r></w:p></w:tc>
+                <w:tc><w:tcPr><w:shd w:val="clear" w:fill="0F766E"/></w:tcPr><w:p><w:r><w:rPr><w:b/><w:sz w:val="18"/><w:color w:val="FFFFFF"/></w:rPr><w:t>Value</w:t></w:r></w:p></w:tc>
+              </w:tr>
+              <!-- Row 1 -->
+              <w:tr>
+                <w:tc><w:tcPr><w:shd w:val="clear" w:fill="EAF7F6"/></w:tcPr><w:p><w:r><w:rPr><w:sz w:val="18"/><w:color w:val="5EA8A4"/></w:rPr><w:t>Health Score</w:t></w:r></w:p></w:tc>
+                <w:tc><w:tcPr><w:shd w:val="clear" w:fill="EAF7F6"/></w:tcPr><w:p><w:r><w:rPr><w:b/><w:sz w:val="20"/></w:rPr><w:t>{{ healthScore }}/100</w:t></w:r></w:p></w:tc>
+                <w:tc><w:tcPr><w:shd w:val="clear" w:fill="FFFFFF"/></w:tcPr><w:p><w:r><w:rPr><w:sz w:val="18"/><w:color w:val="5EA8A4"/></w:rPr><w:t>HRV</w:t></w:r></w:p></w:tc>
+                <w:tc><w:tcPr><w:shd w:val="clear" w:fill="FFFFFF"/></w:tcPr><w:p><w:r><w:rPr><w:b/><w:sz w:val="20"/></w:rPr><w:t>{{ hrv }}</w:t></w:r></w:p></w:tc>
+              </w:tr>
+              <!-- Row 2 -->
+              <w:tr>
+                <w:tc><w:tcPr><w:shd w:val="clear" w:fill="EAF7F6"/></w:tcPr><w:p><w:r><w:rPr><w:sz w:val="18"/><w:color w:val="5EA8A4"/></w:rPr><w:t>Heart Rate</w:t></w:r></w:p></w:tc>
+                <w:tc><w:tcPr><w:shd w:val="clear" w:fill="EAF7F6"/></w:tcPr><w:p><w:r><w:rPr><w:b/><w:sz w:val="20"/></w:rPr><w:t>{{ heartRate }}</w:t></w:r></w:p></w:tc>
+                <w:tc><w:tcPr><w:shd w:val="clear" w:fill="FFFFFF"/></w:tcPr><w:p><w:r><w:rPr><w:sz w:val="18"/><w:color w:val="5EA8A4"/></w:rPr><w:t>Glucose</w:t></w:r></w:p></w:tc>
+                <w:tc><w:tcPr><w:shd w:val="clear" w:fill="FFFFFF"/></w:tcPr><w:p><w:r><w:rPr><w:b/><w:sz w:val="20"/></w:rPr><w:t>{{ glucose }}</w:t></w:r></w:p></w:tc>
+              </w:tr>
+              <!-- Row 3 -->
+              <w:tr>
+                <w:tc><w:tcPr><w:shd w:val="clear" w:fill="EAF7F6"/></w:tcPr><w:p><w:r><w:rPr><w:sz w:val="18"/><w:color w:val="5EA8A4"/></w:rPr><w:t>Sleep</w:t></w:r></w:p></w:tc>
+                <w:tc><w:tcPr><w:shd w:val="clear" w:fill="EAF7F6"/></w:tcPr><w:p><w:r><w:rPr><w:b/><w:sz w:val="20"/></w:rPr><w:t>{{ sleepHours }}</w:t></w:r></w:p></w:tc>
+                <w:tc><w:tcPr><w:shd w:val="clear" w:fill="FFFFFF"/></w:tcPr><w:p><w:r><w:rPr><w:sz w:val="18"/><w:color w:val="5EA8A4"/></w:rPr><w:t>Steps</w:t></w:r></w:p></w:tc>
+                <w:tc><w:tcPr><w:shd w:val="clear" w:fill="FFFFFF"/></w:tcPr><w:p><w:r><w:rPr><w:b/><w:sz w:val="20"/></w:rPr><w:t>{{ steps }}</w:t></w:r></w:p></w:tc>
+              </w:tr>
+              <!-- Row 4 -->
+              <w:tr>
+                <w:tc><w:tcPr><w:shd w:val="clear" w:fill="EAF7F6"/></w:tcPr><w:p><w:r><w:rPr><w:sz w:val="18"/><w:color w:val="5EA8A4"/></w:rPr><w:t>Skin Score</w:t></w:r></w:p></w:tc>
+                <w:tc><w:tcPr><w:shd w:val="clear" w:fill="EAF7F6"/></w:tcPr><w:p><w:r><w:rPr><w:b/><w:sz w:val="20"/></w:rPr><w:t>{{ skinScore }}</w:t></w:r></w:p></w:tc>
+                <w:tc><w:tcPr><w:shd w:val="clear" w:fill="FFFFFF"/></w:tcPr><w:p><w:r><w:rPr><w:sz w:val="18"/><w:color w:val="5EA8A4"/></w:rPr><w:t>Digestive Signal</w:t></w:r></w:p></w:tc>
+                <w:tc><w:tcPr><w:shd w:val="clear" w:fill="FFFFFF"/></w:tcPr><w:p><w:r><w:rPr><w:sz w:val="18"/></w:rPr><w:t>{{ digestiveIssues }}</w:t></w:r></w:p></w:tc>
+              </w:tr>
+            </w:tbl>
+            <w:p><w:pPr><w:spacing w:after="160"/></w:pPr></w:p>
 
-            <!-- Causal findings -->
-            <w:p><w:r><w:rPr><w:b/><w:sz w:val="32"/><w:color w:val="0F766E"/></w:rPr><w:t>Causal Chain Findings</w:t></w:r></w:p>
-            <w:p><w:r><w:rPr><w:b/></w:rPr><w:t>1.</w:t></w:r><w:r><w:t xml:space="preserve"> {{ causalInsight1 }}</w:t></w:r></w:p>
-            <w:p><w:r><w:rPr><w:b/></w:rPr><w:t>2.</w:t></w:r><w:r><w:t xml:space="preserve"> {{ causalInsight2 }}</w:t></w:r></w:p>
-            <w:p><w:r><w:rPr><w:b/></w:rPr><w:t>3.</w:t></w:r><w:r><w:t xml:space="preserve"> {{ causalInsight3 }}</w:t></w:r></w:p>
-            <w:p><w:r><w:t xml:space="preserve"> </w:t></w:r></w:p>
+            <!-- ═══════════════════════════════════════════════════════════════ -->
+            <!-- CAUSAL CHAIN FINDINGS                                            -->
+            <!-- ═══════════════════════════════════════════════════════════════ -->
+            <w:p><w:r><w:rPr><w:b/><w:sz w:val="26"/><w:color w:val="0F766E"/></w:rPr><w:t>CAUSAL CHAIN FINDINGS</w:t></w:r></w:p>
+            <w:p><w:pPr><w:pBdr><w:bottom w:val="single" w:sz="4" w:color="0F766E"/></w:pBdr><w:spacing w:after="80"/></w:pPr></w:p>
+            <!-- Finding 1 -->
+            <w:tbl>
+              <w:tblPr>
+                <w:tblW w:w="5000" w:type="pct"/>
+                <w:tblBorders>
+                  <w:top w:val="none" w:sz="0"/><w:bottom w:val="none" w:sz="0"/>
+                  <w:left w:val="single" w:sz="12" w:color="0F766E"/>
+                  <w:right w:val="none" w:sz="0"/>
+                  <w:insideH w:val="none" w:sz="0"/><w:insideV w:val="none" w:sz="0"/>
+                </w:tblBorders>
+                <w:tblCellMar><w:left w:w="160" w:type="dxa"/></w:tblCellMar>
+              </w:tblPr>
+              <w:tr>
+                <w:tc>
+                  <w:tcPr><w:shd w:val="clear" w:fill="F7FDFC"/></w:tcPr>
+                  <w:p><w:r><w:rPr><w:b/><w:sz w:val="20"/><w:color w:val="0F766E"/></w:rPr><w:t>Chain 1</w:t></w:r></w:p>
+                  <w:p><w:r><w:rPr><w:b/><w:sz w:val="20"/><w:color w:val="1A1A1A"/></w:rPr><w:t>{{ causalInsight1 }}</w:t></w:r></w:p>
+                </w:tc>
+              </w:tr>
+            </w:tbl>
+            <w:p><w:pPr><w:spacing w:after="80"/></w:pPr></w:p>
+            <!-- Finding 2 -->
+            <w:tbl>
+              <w:tblPr>
+                <w:tblW w:w="5000" w:type="pct"/>
+                <w:tblBorders>
+                  <w:top w:val="none" w:sz="0"/><w:bottom w:val="none" w:sz="0"/>
+                  <w:left w:val="single" w:sz="12" w:color="5EA8A4"/>
+                  <w:right w:val="none" w:sz="0"/>
+                  <w:insideH w:val="none" w:sz="0"/><w:insideV w:val="none" w:sz="0"/>
+                </w:tblBorders>
+                <w:tblCellMar><w:left w:w="160" w:type="dxa"/></w:tblCellMar>
+              </w:tblPr>
+              <w:tr>
+                <w:tc>
+                  <w:tcPr><w:shd w:val="clear" w:fill="F7FDFC"/></w:tcPr>
+                  <w:p><w:r><w:rPr><w:b/><w:sz w:val="20"/><w:color w:val="5EA8A4"/></w:rPr><w:t>Chain 2</w:t></w:r></w:p>
+                  <w:p><w:r><w:rPr><w:sz w:val="20"/><w:color w:val="333333"/></w:rPr><w:t>{{ causalInsight2 }}</w:t></w:r></w:p>
+                </w:tc>
+              </w:tr>
+            </w:tbl>
+            <w:p><w:pPr><w:spacing w:after="80"/></w:pPr></w:p>
+            <!-- Finding 3 -->
+            <w:tbl>
+              <w:tblPr>
+                <w:tblW w:w="5000" w:type="pct"/>
+                <w:tblBorders>
+                  <w:top w:val="none" w:sz="0"/><w:bottom w:val="none" w:sz="0"/>
+                  <w:left w:val="single" w:sz="12" w:color="A7D8D4"/>
+                  <w:right w:val="none" w:sz="0"/>
+                  <w:insideH w:val="none" w:sz="0"/><w:insideV w:val="none" w:sz="0"/>
+                </w:tblBorders>
+                <w:tblCellMar><w:left w:w="160" w:type="dxa"/></w:tblCellMar>
+              </w:tblPr>
+              <w:tr>
+                <w:tc>
+                  <w:tcPr><w:shd w:val="clear" w:fill="FAFFFE"/></w:tcPr>
+                  <w:p><w:r><w:rPr><w:b/><w:sz w:val="20"/><w:color w:val="A7D8D4"/></w:rPr><w:t>Chain 3</w:t></w:r></w:p>
+                  <w:p><w:r><w:rPr><w:sz w:val="20"/><w:color w:val="555555"/></w:rPr><w:t>{{ causalInsight3 }}</w:t></w:r></w:p>
+                </w:tc>
+              </w:tr>
+            </w:tbl>
+            <w:p><w:pPr><w:spacing w:after="160"/></w:pPr></w:p>
 
-            <!-- Recommendations -->
-            <w:p><w:r><w:rPr><w:b/><w:sz w:val="32"/><w:color w:val="0F766E"/></w:rPr><w:t>Recommended Next Experiments</w:t></w:r></w:p>
-            <w:p><w:r><w:rPr><w:b/></w:rPr><w:t>1.</w:t></w:r><w:r><w:t xml:space="preserve"> {{ recommendation1 }}</w:t></w:r></w:p>
-            <w:p><w:r><w:rPr><w:b/></w:rPr><w:t>2.</w:t></w:r><w:r><w:t xml:space="preserve"> {{ recommendation2 }}</w:t></w:r></w:p>
-            <w:p><w:r><w:rPr><w:b/></w:rPr><w:t>3.</w:t></w:r><w:r><w:t xml:space="preserve"> {{ recommendation3 }}</w:t></w:r></w:p>
+            <!-- ═══════════════════════════════════════════════════════════════ -->
+            <!-- MEAL & GLUCOSE PATTERNS                                          -->
+            <!-- ═══════════════════════════════════════════════════════════════ -->
+            <w:p><w:r><w:rPr><w:b/><w:sz w:val="26"/><w:color w:val="0F766E"/></w:rPr><w:t>MEAL &amp; GLUCOSE PATTERNS</w:t></w:r></w:p>
+            <w:p><w:pPr><w:pBdr><w:bottom w:val="single" w:sz="4" w:color="0F766E"/></w:pBdr><w:spacing w:after="60"/></w:pPr></w:p>
+            <w:tbl>
+              <w:tblPr>
+                <w:tblW w:w="5000" w:type="pct"/>
+                <w:tblBorders>
+                  <w:top w:val="single" w:sz="2" w:color="D9D9D9"/>
+                  <w:left w:val="none"/><w:right w:val="none"/>
+                  <w:bottom w:val="single" w:sz="2" w:color="D9D9D9"/>
+                  <w:insideH w:val="single" w:sz="2" w:color="EFEFEF"/>
+                  <w:insideV w:val="none"/>
+                </w:tblBorders>
+                <w:tblCellMar>
+                  <w:top w:w="80" w:type="dxa"/>
+                  <w:left w:w="120" w:type="dxa"/>
+                  <w:bottom w:w="80" w:type="dxa"/>
+                  <w:right w:w="120" w:type="dxa"/>
+                </w:tblCellMar>
+              </w:tblPr>
+              <w:tr>
+                <w:tc><w:tcPr><w:shd w:val="clear" w:fill="0F766E"/></w:tcPr><w:p><w:r><w:rPr><w:b/><w:sz w:val="18"/><w:color w:val="FFFFFF"/></w:rPr><w:t>#</w:t></w:r></w:p></w:tc>
+                <w:tc><w:tcPr><w:shd w:val="clear" w:fill="0F766E"/></w:tcPr><w:p><w:r><w:rPr><w:b/><w:sz w:val="18"/><w:color w:val="FFFFFF"/></w:rPr><w:t>Meal &amp; Source · Glycemic Load · Glucose Impact</w:t></w:r></w:p></w:tc>
+              </w:tr>
+              <w:tr>
+                <w:tc><w:tcPr><w:shd w:val="clear" w:fill="EAF7F6"/></w:tcPr><w:p><w:r><w:rPr><w:b/><w:sz w:val="20"/><w:color w:val="0F766E"/></w:rPr><w:t>1</w:t></w:r></w:p></w:tc>
+                <w:tc><w:tcPr><w:shd w:val="clear" w:fill="FFFFFF"/></w:tcPr><w:p><w:r><w:rPr><w:sz w:val="20"/></w:rPr><w:t>{{ mealInsight1 }}</w:t></w:r></w:p></w:tc>
+              </w:tr>
+              <w:tr>
+                <w:tc><w:tcPr><w:shd w:val="clear" w:fill="EAF7F6"/></w:tcPr><w:p><w:r><w:rPr><w:b/><w:sz w:val="20"/><w:color w:val="0F766E"/></w:rPr><w:t>2</w:t></w:r></w:p></w:tc>
+                <w:tc><w:tcPr><w:shd w:val="clear" w:fill="F9F9F9"/></w:tcPr><w:p><w:r><w:rPr><w:sz w:val="20"/></w:rPr><w:t>{{ mealInsight2 }}</w:t></w:r></w:p></w:tc>
+              </w:tr>
+              <w:tr>
+                <w:tc><w:tcPr><w:shd w:val="clear" w:fill="EAF7F6"/></w:tcPr><w:p><w:r><w:rPr><w:b/><w:sz w:val="20"/><w:color w:val="0F766E"/></w:rPr><w:t>3</w:t></w:r></w:p></w:tc>
+                <w:tc><w:tcPr><w:shd w:val="clear" w:fill="FFFFFF"/></w:tcPr><w:p><w:r><w:rPr><w:sz w:val="20"/></w:rPr><w:t>{{ mealInsight3 }}</w:t></w:r></w:p></w:tc>
+              </w:tr>
+            </w:tbl>
+            <w:p><w:pPr><w:spacing w:after="160"/></w:pPr></w:p>
 
-            <w:p><w:r><w:t xml:space="preserve"> </w:t></w:r></w:p>
-            <w:p><w:r><w:rPr><w:color w:val="666666"/></w:rPr><w:t>This summary is AI generated and is not a medical diagnosis. Share this report with a licensed clinician for confirmation.</w:t></w:r></w:p>
-            <w:p>
-              <w:pPr><w:jc w:val="center"/></w:pPr>
-              <w:r><w:rPr><w:color w:val="888888"/></w:rPr><w:t>Generated by VITA — Personal Health Causality Engine</w:t></w:r>
-            </w:p>
+            <!-- ═══════════════════════════════════════════════════════════════ -->
+            <!-- SKIN HEALTH                                                      -->
+            <!-- ═══════════════════════════════════════════════════════════════ -->
+            <w:p><w:r><w:rPr><w:b/><w:sz w:val="26"/><w:color w:val="0F766E"/></w:rPr><w:t>SKIN HEALTH (PerfectCorp AI)</w:t></w:r></w:p>
+            <w:p><w:pPr><w:pBdr><w:bottom w:val="single" w:sz="4" w:color="0F766E"/></w:pBdr><w:spacing w:after="60"/></w:pPr></w:p>
+            <w:tbl>
+              <w:tblPr>
+                <w:tblW w:w="5000" w:type="pct"/>
+                <w:tblBorders>
+                  <w:top w:val="single" w:sz="2" w:color="D9D9D9"/>
+                  <w:left w:val="none"/><w:right w:val="none"/>
+                  <w:bottom w:val="single" w:sz="2" w:color="D9D9D9"/>
+                  <w:insideH w:val="single" w:sz="2" w:color="EFEFEF"/>
+                  <w:insideV w:val="none"/>
+                </w:tblBorders>
+                <w:tblCellMar>
+                  <w:top w:w="80" w:type="dxa"/>
+                  <w:left w:w="120" w:type="dxa"/>
+                  <w:bottom w:w="80" w:type="dxa"/>
+                  <w:right w:w="120" w:type="dxa"/>
+                </w:tblCellMar>
+              </w:tblPr>
+              <w:tr>
+                <w:tc><w:tcPr><w:shd w:val="clear" w:fill="0F766E"/><w:tcW w:w="1200" w:type="dxa"/></w:tcPr><w:p><w:r><w:rPr><w:b/><w:sz w:val="18"/><w:color w:val="FFFFFF"/></w:rPr><w:t>Overall Score</w:t></w:r></w:p></w:tc>
+                <w:tc><w:tcPr><w:shd w:val="clear" w:fill="0F766E"/></w:tcPr><w:p><w:r><w:rPr><w:b/><w:sz w:val="18"/><w:color w:val="FFFFFF"/></w:rPr><w:t>Detected Conditions</w:t></w:r></w:p></w:tc>
+              </w:tr>
+              <w:tr>
+                <w:tc><w:tcPr><w:shd w:val="clear" w:fill="EAF7F6"/><w:vAlign w:val="center"/></w:tcPr><w:p><w:pPr><w:jc w:val="center"/></w:pPr><w:r><w:rPr><w:b/><w:sz w:val="40"/><w:color w:val="0F766E"/></w:rPr><w:t>{{ skinScore }}</w:t></w:r></w:p></w:tc>
+                <w:tc><w:tcPr><w:shd w:val="clear" w:fill="FFFFFF"/></w:tcPr>
+                  <w:p><w:r><w:rPr><w:sz w:val="20"/></w:rPr><w:t>{{ skinInsight1 }}</w:t></w:r></w:p>
+                  <w:p><w:r><w:rPr><w:sz w:val="20"/></w:rPr><w:t>{{ skinInsight2 }}</w:t></w:r></w:p>
+                </w:tc>
+              </w:tr>
+            </w:tbl>
+            <w:p><w:pPr><w:spacing w:after="160"/></w:pPr></w:p>
 
-            <w:sectPr/>
+            <!-- ═══════════════════════════════════════════════════════════════ -->
+            <!-- RECOMMENDED INTERVENTIONS                                         -->
+            <!-- ═══════════════════════════════════════════════════════════════ -->
+            <w:p><w:r><w:rPr><w:b/><w:sz w:val="26"/><w:color w:val="0F766E"/></w:rPr><w:t>RECOMMENDED INTERVENTIONS</w:t></w:r></w:p>
+            <w:p><w:pPr><w:pBdr><w:bottom w:val="single" w:sz="4" w:color="0F766E"/></w:pBdr><w:spacing w:after="80"/></w:pPr></w:p>
+            <w:tbl>
+              <w:tblPr>
+                <w:tblW w:w="5000" w:type="pct"/>
+                <w:tblBorders>
+                  <w:top w:val="none" w:sz="0"/><w:bottom w:val="none" w:sz="0"/>
+                  <w:left w:val="none" w:sz="0"/><w:right w:val="none" w:sz="0"/>
+                  <w:insideH w:val="single" w:sz="2" w:color="EFEFEF"/>
+                  <w:insideV w:val="none"/>
+                </w:tblBorders>
+                <w:tblCellMar>
+                  <w:top w:w="100" w:type="dxa"/>
+                  <w:left w:w="120" w:type="dxa"/>
+                  <w:bottom w:w="100" w:type="dxa"/>
+                  <w:right w:w="120" w:type="dxa"/>
+                </w:tblCellMar>
+              </w:tblPr>
+              <!-- Rec 1 -->
+              <w:tr>
+                <w:tc><w:tcPr><w:shd w:val="clear" w:fill="0F766E"/><w:tcW w:w="400" w:type="dxa"/><w:vAlign w:val="center"/></w:tcPr>
+                  <w:p><w:pPr><w:jc w:val="center"/></w:pPr><w:r><w:rPr><w:b/><w:sz w:val="28"/><w:color w:val="FFFFFF"/></w:rPr><w:t>1</w:t></w:r></w:p>
+                </w:tc>
+                <w:tc><w:tcPr><w:shd w:val="clear" w:fill="EAF7F6"/></w:tcPr>
+                  <w:p><w:r><w:rPr><w:sz w:val="20"/><w:color w:val="1A1A1A"/></w:rPr><w:t>{{ recommendation1 }}</w:t></w:r></w:p>
+                </w:tc>
+              </w:tr>
+              <!-- Rec 2 -->
+              <w:tr>
+                <w:tc><w:tcPr><w:shd w:val="clear" w:fill="5EA8A4"/><w:tcW w:w="400" w:type="dxa"/><w:vAlign w:val="center"/></w:tcPr>
+                  <w:p><w:pPr><w:jc w:val="center"/></w:pPr><w:r><w:rPr><w:b/><w:sz w:val="28"/><w:color w:val="FFFFFF"/></w:rPr><w:t>2</w:t></w:r></w:p>
+                </w:tc>
+                <w:tc><w:tcPr><w:shd w:val="clear" w:fill="FFFFFF"/></w:tcPr>
+                  <w:p><w:r><w:rPr><w:sz w:val="20"/><w:color w:val="333333"/></w:rPr><w:t>{{ recommendation2 }}</w:t></w:r></w:p>
+                </w:tc>
+              </w:tr>
+              <!-- Rec 3 -->
+              <w:tr>
+                <w:tc><w:tcPr><w:shd w:val="clear" w:fill="A7D8D4"/><w:tcW w:w="400" w:type="dxa"/><w:vAlign w:val="center"/></w:tcPr>
+                  <w:p><w:pPr><w:jc w:val="center"/></w:pPr><w:r><w:rPr><w:b/><w:sz w:val="28"/><w:color w:val="FFFFFF"/></w:rPr><w:t>3</w:t></w:r></w:p>
+                </w:tc>
+                <w:tc><w:tcPr><w:shd w:val="clear" w:fill="F4FCFB"/></w:tcPr>
+                  <w:p><w:r><w:rPr><w:sz w:val="20"/><w:color w:val="444444"/></w:rPr><w:t>{{ recommendation3 }}</w:t></w:r></w:p>
+                </w:tc>
+              </w:tr>
+            </w:tbl>
+            <w:p><w:pPr><w:spacing w:after="200"/></w:pPr></w:p>
+
+            <!-- ═══════════════════════════════════════════════════════════════ -->
+            <!-- SUPPORTING EVIDENCE                                              -->
+            <!-- ═══════════════════════════════════════════════════════════════ -->
+            <w:p><w:r><w:rPr><w:sz w:val="18"/><w:color w:val="5EA8A4"/></w:rPr><w:t>SUPPORTING EVIDENCE</w:t></w:r></w:p>
+            <w:p><w:r><w:rPr><w:sz w:val="18"/><w:color w:val="555555"/></w:rPr><w:t>{{ supportingEvidence }}</w:t></w:r></w:p>
+            <w:p><w:pPr><w:spacing w:after="120"/></w:pPr></w:p>
+
+            <!-- ═══════════════════════════════════════════════════════════════ -->
+            <!-- FOOTER                                                           -->
+            <!-- ═══════════════════════════════════════════════════════════════ -->
+            <w:tbl>
+              <w:tblPr>
+                <w:tblW w:w="5000" w:type="pct"/>
+                <w:tblBorders>
+                  <w:top w:val="single" w:sz="4" w:color="0F766E"/>
+                  <w:left w:val="none"/><w:bottom w:val="none"/><w:right w:val="none"/>
+                  <w:insideH w:val="none"/><w:insideV w:val="none"/>
+                </w:tblBorders>
+                <w:tblCellMar><w:top w:w="80" w:type="dxa"/></w:tblCellMar>
+              </w:tblPr>
+              <w:tr>
+                <w:tc><w:tcPr><w:tcW w:w="3200" w:type="dxa"/></w:tcPr>
+                  <w:p><w:r><w:rPr><w:sz w:val="16"/><w:color w:val="888888"/></w:rPr><w:t>This report is AI-generated and does not constitute a medical diagnosis. Share with a licensed clinician for clinical interpretation.</w:t></w:r></w:p>
+                </w:tc>
+                <w:tc><w:tcPr><w:tcW w:w="1800" w:type="dxa"/><w:vAlign w:val="center"/></w:tcPr>
+                  <w:p><w:pPr><w:jc w:val="right"/></w:pPr>
+                    <w:r><w:rPr><w:b/><w:sz w:val="18"/><w:color w:val="0F766E"/></w:rPr><w:t>VITA</w:t></w:r>
+                    <w:r><w:rPr><w:sz w:val="16"/><w:color w:val="888888"/></w:rPr><w:t xml:space="preserve">  Personal Health Causality Engine</w:t></w:r>
+                  </w:p>
+                  <w:p><w:pPr><w:jc w:val="right"/></w:pPr>
+                    <w:r><w:rPr><w:sz w:val="16"/><w:color w:val="AAAAAA"/></w:rPr><w:t>{{ reportId }}</w:t></w:r>
+                  </w:p>
+                </w:tc>
+              </w:tr>
+            </w:tbl>
+
+            <w:sectPr>
+              <w:pgMar w:top="720" w:right="900" w:bottom="720" w:left="900"/>
+            </w:sectPr>
           </w:body>
         </w:document>
         """
