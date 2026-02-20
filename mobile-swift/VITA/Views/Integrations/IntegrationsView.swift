@@ -41,6 +41,10 @@ struct IntegrationsView: View {
                 guard tab == .integrations else { return }
                 viewModel.refresh(from: appState)
             }
+            .onChange(of: appState.selectedMockScenario) { _, _ in
+                guard appState.isLoaded else { return }
+                viewModel.refresh(from: appState)
+            }
         }
     }
 }

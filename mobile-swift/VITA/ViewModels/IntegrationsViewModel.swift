@@ -257,8 +257,8 @@ final class IntegrationsViewModel {
 
         let now = Date()
         let cutoff24h = now.addingTimeInterval(-24 * 3_600)
-
-        let generated = generate30DayData(now: now)
+        let scenario = (appState ?? self.appState)?.selectedMockScenario ?? .allDataLooksGood
+        let generated = generatedData(now: now, scenario: scenario)
         var historyEvents = generated.historyEvents
         if let skinSync = syncedSkinData(now: now) {
             latestSkinSnapshot = skinSync.snapshot
@@ -291,6 +291,18 @@ final class IntegrationsViewModel {
             watchHR = latestWatch.hr
             watchSteps = latestWatch.steps
         }
+    }
+
+    private func generatedData(now: Date, scenario: AppState.MockDataScenario) -> GeneratedData {
+        let dayStart = Calendar.current.startOfDay(for: now)
+        let key = CacheKey(scenario: scenario, dayStart: dayStart)
+        if let cached = Self.generatedCache[key] {
+            return cached
+        }
+
+        let generated = generate30DayData(now: now, scenario: scenario)
+        Self.generatedCache[key] = generated
+        return generated
     }
 
     private func syncedEnvironmentReadings(now: Date) -> [EnvironmentReading]? {
@@ -382,7 +394,14 @@ final class IntegrationsViewModel {
         let historyEvents: [IntegrationHistoryEvent]
     }
 
-    private func generate30DayData(now: Date) -> GeneratedData {
+    private struct CacheKey: Hashable {
+        let scenario: AppState.MockDataScenario
+        let dayStart: Date
+    }
+
+    private static var generatedCache: [CacheKey: GeneratedData] = [:]
+
+    private func generate30DayData(now: Date, scenario: AppState.MockDataScenario) -> GeneratedData {
         var dd: [DoorDashOrder] = []
         var roti: [RotimaticSession] = []
         var ip: [InstantPotProgram] = []
@@ -394,16 +413,51 @@ final class IntegrationsViewModel {
         var watch: [WatchSnapshot] = []
         var events: [IntegrationHistoryEvent] = []
 
-        let baseWeight = Double.random(in: 68.5...73.5)
+        let highGLDoorDash = Self.doordashPool.filter { $0.gl >= 30 }
+        let balancedDoorDash = Self.doordashPool.filter { $0.gl < 30 }
+        let healthyDoorDash = Self.doordashPool.filter { $0.gl <= 22 }
+        let highGLInstacart = Self.instacartPool.filter { $0.gl >= 18 }
+        let balancedInstacart = Self.instacartPool.filter { $0.gl < 18 }
+        let healthyInstacart = Self.instacartPool.filter { $0.gl <= 12 }
+
+        let baseWeight: Double
+        switch scenario {
+        case .bodyScaleNotGood:
+            baseWeight = Double.random(in: 79.5...84.0)
+        default:
+            baseWeight = Double.random(in: 68.0...73.0)
+        }
 
         for day in 0..<30 {
             let dayBase = now.addingTimeInterval(-Double(day) * 86_400)
 
-            // DoorDash 0-2/day
-            for _ in 0..<Int.random(in: 0...2) {
-                guard let item = Self.doordashPool.randomElement() else { continue }
-                let t = dayBase.addingTimeInterval(-Double.random(in: 0...82_800))
-                let gl = (item.gl + Double.random(in: -3...3)).clamped(to: 5...60)
+            // DoorDash orders
+            let ddPool: [DDEntry]
+            let ddRange: ClosedRange<Int>
+            let ddJitter: ClosedRange<Double>
+            switch scenario {
+            case .doordashAndInstacartNotPositive:
+                ddPool = highGLDoorDash.isEmpty ? Self.doordashPool : highGLDoorDash
+                ddRange = 1...2
+                ddJitter = 2...8
+            case .allDataLooksGood:
+                ddPool = healthyDoorDash.isEmpty ? balancedDoorDash : healthyDoorDash
+                ddRange = 0...1
+                ddJitter = -6...1
+            default:
+                ddPool = balancedDoorDash.isEmpty ? Self.doordashPool : balancedDoorDash
+                ddRange = 0...1
+                ddJitter = -3...3
+            }
+
+            let ddCount = day == 0 ? max(1, Int.random(in: ddRange)) : Int.random(in: ddRange)
+            for _ in 0..<ddCount {
+                guard let item = ddPool.randomElement() else { continue }
+                let offset = day == 0
+                    ? Double.random(in: 1_200...18_000)
+                    : Double.random(in: 0...82_800)
+                let t = dayBase.addingTimeInterval(-offset)
+                let gl = (item.gl + Double.random(in: ddJitter)).clamped(to: 5...60)
                 let order = DoorDashOrder(
                     name: item.name,
                     classification: "meal: \(item.name)",
@@ -418,12 +472,13 @@ final class IntegrationsViewModel {
                     category: "meal",
                     item: item.name,
                     timestamp: t,
-                    notes: ["GL \(Int(gl))", order.glucoseImpact]
+                    notes: ["GL \(Int(gl))", order.glucoseImpact, "scenario \(scenario.rawValue)"]
                 ))
             }
 
             // Rotimatic 0-1/day
-            if Bool.random(), let r = Self.rotimatics.randomElement() {
+            let shouldAddRoti = (day == 0) || (scenario == .allDataLooksGood ? day % 2 == 0 : day % 3 == 0)
+            if shouldAddRoti, let r = Self.rotimatics.randomElement() {
                 let t = dayBase.addingTimeInterval(-Double.random(in: 0...82_800))
                 let gl = Double.random(in: r.glRange)
                 let session = RotimaticSession(
@@ -445,7 +500,8 @@ final class IntegrationsViewModel {
             }
 
             // Instant Pot 0-1/day
-            if Bool.random(), let r = Self.ipRecipes.randomElement() {
+            let shouldAddInstantPot = (day == 0) || day % 2 == 0
+            if shouldAddInstantPot, let r = Self.ipRecipes.randomElement() {
                 let t = dayBase.addingTimeInterval(-Double.random(in: 0...82_800))
                 let bio = Double.random(in: r.bioavailability)
                 let program = InstantPotProgram(
@@ -466,11 +522,44 @@ final class IntegrationsViewModel {
                 ))
             }
 
-            // Instacart every ~2 days
-            if day % 2 == 0, let entry = Self.instacartPool.randomElement() {
+            // Instacart baskets
+            let shouldAddInstacart: Bool = {
+                switch scenario {
+                case .doordashAndInstacartNotPositive:
+                    return day == 0 || day % 2 == 0
+                case .allDataLooksGood:
+                    return day == 0 || day % 3 == 0
+                default:
+                    return day == 0 || day % 4 == 0
+                }
+            }()
+
+            let instacartPool: [ICEntry]
+            let instacartJitter: ClosedRange<Double>
+            switch scenario {
+            case .doordashAndInstacartNotPositive:
+                instacartPool = highGLInstacart.isEmpty ? Self.instacartPool : highGLInstacart
+                instacartJitter = 1...5
+            case .allDataLooksGood:
+                instacartPool = healthyInstacart.isEmpty ? balancedInstacart : healthyInstacart
+                instacartJitter = -4...1
+            default:
+                instacartPool = balancedInstacart.isEmpty ? Self.instacartPool : balancedInstacart
+                instacartJitter = -2...2
+            }
+
+            if shouldAddInstacart, let entry = instacartPool.randomElement() {
                 let t = dayBase.addingTimeInterval(-Double.random(in: 0...82_800))
-                let gl = (entry.gl + Double.random(in: -2...2)).clamped(to: 2...60)
-                let score: Int = gl < 12 ? Int.random(in: 82...95) : (gl < 25 ? Int.random(in: 60...80) : Int.random(in: 35...58))
+                let gl = (entry.gl + Double.random(in: instacartJitter)).clamped(to: 2...60)
+                let score: Int
+                switch scenario {
+                case .doordashAndInstacartNotPositive:
+                    score = Int.random(in: 30...58)
+                case .allDataLooksGood:
+                    score = Int.random(in: 82...96)
+                default:
+                    score = gl < 15 ? Int.random(in: 70...88) : Int.random(in: 52...72)
+                }
                 let order = InstacartOrder(
                     label: entry.label,
                     classification: "grocery basket: \(entry.label)",
@@ -486,19 +575,44 @@ final class IntegrationsViewModel {
                         category: "grocery",
                         item: item.name,
                         timestamp: t,
-                        notes: item.glycemicIndex.map { ["GI \(Int($0))"] } ?? []
+                        notes: (item.glycemicIndex.map { ["GI \(Int($0))"] } ?? []) + ["score \(order.healthScore)"]
                     ))
                 }
             }
 
             // Weight daily
             let tWeight = dayBase.addingTimeInterval(-Double.random(in: 0...7_200))
-            let w = (baseWeight + Double.random(in: -0.4...0.4) - Double(day) * 0.03)
+            let progress = Double(29 - day)
+            let trendShift: Double
+            let dayNoise: Double
+            switch scenario {
+            case .bodyScaleNotGood:
+                trendShift = progress * 0.07
+                dayNoise = Double.random(in: -0.2...0.3)
+            case .allDataLooksGood:
+                trendShift = -progress * 0.03
+                dayNoise = Double.random(in: -0.2...0.2)
+            default:
+                trendShift = progress * 0.01
+                dayNoise = Double.random(in: -0.25...0.25)
+            }
+            let w = baseWeight + trendShift + dayNoise
             let roundedW = (w * 10).rounded() / 10
+            let deltaRange: ClosedRange<Double>
+            switch scenario {
+            case .bodyScaleNotGood:
+                deltaRange = 0.1...0.5
+            case .allDataLooksGood:
+                deltaRange = -0.4...0.1
+            default:
+                deltaRange = -0.2...0.2
+            }
+            let delta = day == 29 ? nil : (Double.random(in: deltaRange) * 10).rounded() / 10
+            let trendLabel = scenario == .bodyScaleNotGood ? "up" : (scenario == .allDataLooksGood ? "down/stable" : "mixed")
             let reading = WeightReading(
                 timestamp: tWeight,
                 weightKg: roundedW,
-                delta: day == 29 ? nil : (Double.random(in: -0.35...0.35) * 10).rounded() / 10,
+                delta: delta,
                 classification: "body metric: weight \(String(format: "%.1f", roundedW))kg"
             )
             weight.append(reading)
@@ -507,14 +621,24 @@ final class IntegrationsViewModel {
                 category: "body_metric",
                 item: "weight",
                 timestamp: tWeight,
-                notes: [String(format: "%.1fkg", roundedW)]
+                notes: [String(format: "%.1fkg", roundedW), "trend \(trendLabel)"]
             ))
 
-            // Zombie scrolling ~40%
-            if Double.random(in: 0...1) < 0.4 {
-                let viewed = Int.random(in: 20...90)
-                let purchased = Int.random(in: 2...max(2, min(15, viewed / 4)))
-                let duration = Double.random(in: 10...50)
+            // Zombie scrolling sessions
+            let zombieChance: Double
+            switch scenario {
+            case .screenTimeNotGood:
+                zombieChance = 0.9
+            case .allDataLooksGood:
+                zombieChance = 0.2
+            default:
+                zombieChance = 0.45
+            }
+
+            if day == 0 || Double.random(in: 0...1) < zombieChance {
+                let viewed = Int.random(in: scenario == .screenTimeNotGood ? 60...160 : 20...90)
+                let purchased = Int.random(in: 2...max(2, min(20, viewed / (scenario == .screenTimeNotGood ? 3 : 4))))
+                let duration = Double.random(in: scenario == .screenTimeNotGood ? 35...95 : 10...50)
                 let t = dayBase.addingTimeInterval(-Double.random(in: 0...82_800))
                 let z = ZombieScrollSession(
                     timestamp: t,
@@ -529,17 +653,35 @@ final class IntegrationsViewModel {
                     category: "scrolling",
                     item: "impulse_browsing",
                     timestamp: t,
-                    notes: ["\(Int(z.durationMinutes))min", "ratio \(Int(z.impulseRatio * 100))%"]
+                    notes: ["\(Int(z.durationMinutes))min", "ratio \(Int(z.impulseRatio * 100))%", scenario == .screenTimeNotGood ? "high_risk" : "normal"]
                 ))
             }
 
-            // Screen Time sessions 2–5/day
-            let sessionCount = Int.random(in: 2...5)
+            // Screen Time sessions
+            let sessionRange: ClosedRange<Int>
+            let minutesRange: ClosedRange<Int>
+            let pickupRange: ClosedRange<Int>
+            switch scenario {
+            case .screenTimeNotGood:
+                sessionRange = 5...8
+                minutesRange = 35...130
+                pickupRange = 8...38
+            case .allDataLooksGood:
+                sessionRange = 1...3
+                minutesRange = 5...35
+                pickupRange = 1...10
+            default:
+                sessionRange = 2...4
+                minutesRange = 8...70
+                pickupRange = 2...22
+            }
+
+            let sessionCount = day == 0 ? max(2, Int.random(in: sessionRange)) : Int.random(in: sessionRange)
             for _ in 0..<sessionCount {
                 guard let app = Self.screenTimeApps.randomElement() else { continue }
                 let t = dayBase.addingTimeInterval(-Double.random(in: 0...82_800))
-                let minutes = Int.random(in: 8...96)
-                let pickups = Int.random(in: 2...24)
+                let minutes = Int.random(in: minutesRange)
+                let pickups = Int.random(in: pickupRange)
                 let session = ScreenTimeSession(
                     timestamp: t,
                     appName: app.name,
@@ -553,7 +695,7 @@ final class IntegrationsViewModel {
                     category: "screen_time",
                     item: app.name,
                     timestamp: t,
-                    notes: ["\(minutes)min", "\(pickups) pickups", app.category]
+                    notes: ["\(minutes)min", "\(pickups) pickups", app.category, "scenario \(scenario.rawValue)"]
                 ))
             }
 
@@ -582,11 +724,32 @@ final class IntegrationsViewModel {
 
             // Watch daily snapshot
             let tWatch = dayBase.addingTimeInterval(-Double.random(in: 0...3_600))
+            let hrvRange: ClosedRange<Double>
+            let hrRange: ClosedRange<Double>
+            let stepsRange: ClosedRange<Int>
+            switch scenario {
+            case .screenTimeNotGood:
+                hrvRange = 30...48
+                hrRange = 70...95
+                stepsRange = 1_500...7_000
+            case .bodyScaleNotGood:
+                hrvRange = 38...58
+                hrRange = 62...84
+                stepsRange = 2_500...8_000
+            case .doordashAndInstacartNotPositive:
+                hrvRange = 40...62
+                hrRange = 60...86
+                stepsRange = 3_000...10_000
+            case .allDataLooksGood:
+                hrvRange = 62...86
+                hrRange = 52...70
+                stepsRange = 7_000...14_000
+            }
             let snapshot = WatchSnapshot(
                 timestamp: tWatch,
-                hrv: (Double.random(in: 34...82) * 10).rounded() / 10,
-                hr: (Double.random(in: 54...91) * 10).rounded() / 10,
-                steps: Int.random(in: 1800...13_500)
+                hrv: (Double.random(in: hrvRange) * 10).rounded() / 10,
+                hr: (Double.random(in: hrRange) * 10).rounded() / 10,
+                steps: Int.random(in: stepsRange)
             )
             watch.append(snapshot)
             events.append(IntegrationHistoryEvent(

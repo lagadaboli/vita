@@ -129,6 +129,27 @@ struct SettingsView: View {
                         Text("Causal Patterns")
                     }
 
+                    Picker(
+                        "Mock Data Profile",
+                        selection: Binding(
+                            get: { appState.selectedMockScenario },
+                            set: { appState.applyMockScenario($0) }
+                        )
+                    ) {
+                        ForEach(AppState.MockDataScenario.allCases) { scenario in
+                            Text(scenario.title).tag(scenario)
+                        }
+                    }
+
+                    HStack(alignment: .top) {
+                        Text("Profile Detail")
+                        Spacer()
+                        Text(appState.selectedMockScenario.subtitle)
+                            .font(VITATypography.caption)
+                            .foregroundStyle(VITAColors.textSecondary)
+                            .multilineTextAlignment(.trailing)
+                    }
+
                     HStack {
                         Text("Database")
                         Spacer()
@@ -149,7 +170,7 @@ struct SettingsView: View {
                     HStack {
                         Text("Data Source")
                         Spacer()
-                        Text("7-day generated dataset")
+                        Text("30-day scenario dataset")
                             .font(VITATypography.caption)
                             .foregroundStyle(VITAColors.textSecondary)
                     }

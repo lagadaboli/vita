@@ -39,7 +39,19 @@ struct TimelineView: View {
             }
             .background(VITAColors.background)
             .navigationTitle("Timeline")
+            .task(id: appState.isLoaded) {
+                guard appState.isLoaded else { return }
+                viewModel.load(from: appState)
+            }
             .onAppear {
+                viewModel.load(from: appState)
+            }
+            .onChange(of: appState.selectedTab) { _, tab in
+                guard tab == .timeline, appState.isLoaded else { return }
+                viewModel.load(from: appState)
+            }
+            .onChange(of: appState.selectedMockScenario) { _, _ in
+                guard appState.isLoaded else { return }
                 viewModel.load(from: appState)
             }
             .refreshable {

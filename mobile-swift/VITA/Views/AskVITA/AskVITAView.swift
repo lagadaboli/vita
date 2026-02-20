@@ -211,8 +211,8 @@ struct AskVITAView: View {
                     .id("thinking")
             }
 
-            // PDF Report section — always at the bottom, uses latest analysis
-            if !viewModel.isQuerying && viewModel.canGenerateReport {
+            // PDF Report section — always at the bottom once a conversation starts
+            if !viewModel.isQuerying && viewModel.hasConversation {
                 reportSection
                     .padding(.horizontal, VITASpacing.lg)
                     .padding(.bottom, VITASpacing.xxxl)
@@ -473,7 +473,7 @@ struct AskVITAView: View {
 private struct AnalysisDisclosureGroup: View {
     let message: ChatMessage
     let causalNodes: (CausalExplanation) -> [CausalChainNode]
-    @State private var isExpanded = false
+    @State private var isExpanded = true
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {

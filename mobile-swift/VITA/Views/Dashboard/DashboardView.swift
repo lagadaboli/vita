@@ -75,6 +75,14 @@ struct DashboardView: View {
                 hasPerformedInitialLoad = true
                 await refreshDashboard(force: false)
             }
+            .onChange(of: appState.selectedTab) { _, tab in
+                guard tab == .dashboard, appState.isLoaded else { return }
+                viewModel.load(from: appState)
+            }
+            .onChange(of: appState.selectedMockScenario) { _, _ in
+                guard appState.isLoaded else { return }
+                viewModel.load(from: appState)
+            }
             .refreshable {
                 await refreshDashboard(force: true)
             }

@@ -247,6 +247,7 @@ final class DashboardViewModel {
             currentAQI = 0
         }
 
+        applyMockScenarioAdjustments(appState.selectedMockScenario)
         computeHealthScore()
         generateInsights()
         hasLoaded = true
@@ -342,6 +343,42 @@ final class DashboardViewModel {
         healthScore = max(min(score, 100), 0)
     }
 
+    private func applyMockScenarioAdjustments(_ scenario: AppState.MockDataScenario) {
+        switch scenario {
+        case .doordashAndInstacartNotPositive:
+            currentGlucose = max(currentGlucose, 162)
+            currentHR = max(currentHR, 74)
+            sleepHours = sleepHours > 0 ? min(sleepHours, 6.2) : 6.2
+            dopamineDebt = max(dopamineDebt, 58)
+            if currentWeight == 0 {
+                currentWeight = 74.8
+            }
+        case .bodyScaleNotGood:
+            currentWeight = max(currentWeight, 82.6)
+            weightTrend = .up
+            currentHR = max(currentHR, 78)
+            sleepHours = sleepHours > 0 ? min(sleepHours, 6.6) : 6.6
+        case .screenTimeNotGood:
+            dopamineDebt = max(dopamineDebt, 84)
+            currentHRV = currentHRV > 0 ? min(currentHRV, 36) : 34
+            sleepHours = sleepHours > 0 ? min(sleepHours, 5.8) : 5.8
+            currentHR = max(currentHR, 76)
+        case .allDataLooksGood:
+            currentGlucose = currentGlucose > 0 ? min(currentGlucose, 104) : 101
+            currentHRV = currentHRV > 0 ? max(currentHRV, 66) : 68
+            sleepHours = sleepHours > 0 ? max(sleepHours, 7.8) : 7.9
+            currentHR = currentHR > 0 ? min(currentHR, 63) : 61
+            dopamineDebt = min(dopamineDebt, 24)
+            currentAQI = currentAQI > 0 ? min(currentAQI, 48) : 42
+            if currentWeight == 0 {
+                currentWeight = 70.4
+            }
+            if weightTrend == .up {
+                weightTrend = .stable
+            }
+        }
+    }
+
     private func generateInsights() {
         insights = []
 
@@ -404,11 +441,14 @@ final class DashboardViewModel {
         }
 
         if weightTrend == .up && currentWeight > 0 {
+            let elevatedWeight = currentWeight >= 80
             insights.append(InsightData(
                 icon: "scalemass",
                 title: "Weight Trending Up",
-                message: "Your weight is trending up at \(String(format: "%.1f", currentWeight)) kg. High GL meals may be contributing.",
-                severity: .info,
+                message: elevatedWeight
+                    ? "Weight is trending up at \(String(format: "%.1f", currentWeight)) kg. Current trend suggests lifestyle stress across meals/activity."
+                    : "Your weight is trending up at \(String(format: "%.1f", currentWeight)) kg. High GL meals may be contributing.",
+                severity: elevatedWeight ? .warning : .info,
                 timestamp: Date().addingTimeInterval(-7200)
             ))
         }
