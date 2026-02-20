@@ -1,11 +1,15 @@
 import SwiftUI
 import VITADesignSystem
+#if canImport(PDFKit)
+import PDFKit
+#endif
 
 struct HealthReportView: View {
     var appState: AppState
     @State private var viewModel = HealthReportViewModel()
     @State private var dashVM = DashboardViewModel()
     @State private var skinVM = SkinHealthViewModel()
+    @State private var isShowingPDFPreview = false
 
     var body: some View {
         NavigationStack {
@@ -27,6 +31,15 @@ struct HealthReportView: View {
             .sheet(isPresented: $viewModel.isShowingShareSheet) {
                 if let data = viewModel.pdfData {
                     ShareSheet(items: [data])
+                }
+            }
+            .sheet(isPresented: $isShowingPDFPreview) {
+                if let data = viewModel.pdfData {
+                    PDFPreviewSheet(
+                        data: data,
+                        title: "Health Report",
+                        suggestedFileName: "VITA-Health-Report.pdf"
+                    )
                 }
             }
         }
@@ -267,6 +280,18 @@ struct HealthReportView: View {
     private var actionButtons: some View {
         VStack(spacing: VITASpacing.md) {
             Button {
+                isShowingPDFPreview = true
+            } label: {
+                Label("Preview Report", systemImage: "doc.viewfinder")
+                    .font(VITATypography.headline)
+                    .foregroundStyle(VITAColors.teal)
+                    .frame(maxWidth: .infinity)
+                    .padding(VITASpacing.md)
+                    .background(VITAColors.teal.opacity(0.1))
+                    .clipShape(RoundedRectangle(cornerRadius: VITASpacing.cardCornerRadius))
+            }
+
+            Button {
                 viewModel.isShowingShareSheet = true
             } label: {
                 Label("Share with Provider", systemImage: "square.and.arrow.up")
@@ -342,3 +367,90 @@ private struct ShareSheet: UIViewControllerRepresentable {
 
     func updateUIViewController(_ uiViewController: UIActivityViewController, context: Context) {}
 }
+
+struct PDFPreviewSheet: View {
+    let data: Data
+    let title: String
+    let suggestedFileName: String
+
+    @Environment(\.dismiss) private var dismiss
+    @State private var isShowingDownloadSheet = false
+    @State private var downloadURL: URL?
+
+    var body: some View {
+        NavigationStack {
+            Group {
+                #if canImport(PDFKit)
+                PDFDocumentView(data: data)
+                #else
+                Text("PDF preview is unavailable on this device.")
+                    .font(VITATypography.callout)
+                    .foregroundStyle(VITAColors.textSecondary)
+                #endif
+            }
+            .background(VITAColors.background)
+            .navigationTitle(title)
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button("Close") { dismiss() }
+                        .foregroundStyle(VITAColors.textPrimary)
+                }
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("Download") {
+                        if let url = writeTemporaryPDF() {
+                            downloadURL = url
+                            isShowingDownloadSheet = true
+                        }
+                    }
+                    .foregroundStyle(VITAColors.teal)
+                }
+            }
+        }
+        .sheet(isPresented: $isShowingDownloadSheet, onDismiss: {
+            if let url = downloadURL {
+                try? FileManager.default.removeItem(at: url)
+                downloadURL = nil
+            }
+        }) {
+            if let url = downloadURL {
+                ShareSheet(items: [url])
+            } else {
+                ShareSheet(items: [data])
+            }
+        }
+    }
+
+    private func writeTemporaryPDF() -> URL? {
+        let baseName = suggestedFileName.hasSuffix(".pdf") ? String(suggestedFileName.dropLast(4)) : suggestedFileName
+        let fileName = "\(baseName)-\(UUID().uuidString.prefix(8)).pdf"
+        let fileURL = FileManager.default.temporaryDirectory.appendingPathComponent(fileName)
+        do {
+            try data.write(to: fileURL, options: .atomic)
+            return fileURL
+        } catch {
+            return nil
+        }
+    }
+}
+
+#if canImport(PDFKit)
+private struct PDFDocumentView: UIViewRepresentable {
+    let data: Data
+
+    func makeUIView(context: Context) -> PDFView {
+        let pdfView = PDFView()
+        pdfView.autoScales = true
+        pdfView.displayMode = .singlePageContinuous
+        pdfView.displayDirection = .vertical
+        pdfView.document = PDFDocument(data: data)
+        return pdfView
+    }
+
+    func updateUIView(_ uiView: PDFView, context: Context) {
+        if uiView.document == nil {
+            uiView.document = PDFDocument(data: data)
+        }
+    }
+}
+#endif

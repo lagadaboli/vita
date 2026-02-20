@@ -8,6 +8,7 @@ import UIKit
 struct AskVITAView: View {
     var appState: AppState
     @State private var viewModel = AskVITAViewModel()
+    @State private var isShowingReportPreview = false
     @Namespace private var composerNamespace
 
     var body: some View {
@@ -91,6 +92,15 @@ struct AskVITAView: View {
             .sheet(isPresented: $viewModel.isShowingReportShareSheet) {
                 if let data = viewModel.reportPDFData {
                     ActivityShareSheet(items: [data])
+                }
+            }
+            .sheet(isPresented: $isShowingReportPreview) {
+                if let data = viewModel.reportPDFData {
+                    PDFPreviewSheet(
+                        data: data,
+                        title: "Clinical Report",
+                        suggestedFileName: "VITA-Clinical-Report.pdf"
+                    )
                 }
             }
         }
@@ -374,11 +384,11 @@ struct AskVITAView: View {
 
                 if viewModel.reportState == .complete && viewModel.reportPDFData != nil {
                     Button {
-                        viewModel.isShowingReportShareSheet = true
+                        isShowingReportPreview = true
                     } label: {
                         HStack(spacing: VITASpacing.xs) {
-                            Image(systemName: "square.and.arrow.up").font(.system(size: 14, weight: .medium))
-                            Text("Share").font(VITATypography.callout)
+                            Image(systemName: "doc.viewfinder").font(.system(size: 14, weight: .medium))
+                            Text("Preview").font(VITATypography.callout)
                         }
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 11)
