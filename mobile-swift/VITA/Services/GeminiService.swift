@@ -16,7 +16,7 @@ struct GeminiService: Sendable {
     }
 
     private struct RequestBody: Encodable {
-        let systemInstruction: SystemInstruction
+        let systemInstruction: SystemInstruction?
         let contents: [Message]
         let generationConfig: GenerationConfig
 
@@ -90,21 +90,27 @@ struct GeminiService: Sendable {
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.timeoutInterval = 30
 
-        let body = RequestBody(
-            systemInstruction: .init(parts: [.init(text: systemPrompt)]),
-            contents: messages,
-            generationConfig: .init(temperature: 0.7, maxOutputTokens: 1024, topP: 0.9)
+        let primaryBody = buildRequestBody(
+            systemPrompt: systemPrompt,
+            messages: messages,
+            model: config.model,
+            forceInlineSystemPrompt: false
         )
 
-        let encoder = JSONEncoder()
-        encoder.keyEncodingStrategy = .convertToSnakeCase
-        request.httpBody = try encoder.encode(body)
-
-        let (data, response) = try await URLSession.shared.data(for: request)
-
-        if let http = response as? HTTPURLResponse, !(200...299).contains(http.statusCode) {
-            let errorBody = String(data: data, encoding: .utf8) ?? "unknown"
-            throw GeminiError.httpError(http.statusCode, errorBody)
+        var data: Data
+        do {
+            data = try await sendRequest(primaryBody, using: request)
+        } catch let GeminiError.httpError(code, body)
+            where code == 400 && body.localizedCaseInsensitiveContains("Developer instruction is not enabled") {
+            // Some models (e.g. Gemma variants) reject system_instruction.
+            // Fallback: inline the system prompt as a leading user message.
+            let fallbackBody = buildRequestBody(
+                systemPrompt: systemPrompt,
+                messages: messages,
+                model: config.model,
+                forceInlineSystemPrompt: true
+            )
+            data = try await sendRequest(fallbackBody, using: request)
         }
 
         let decoder = JSONDecoder()
@@ -117,5 +123,51 @@ struct GeminiService: Sendable {
         }
 
         return text.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private static func buildRequestBody(
+        systemPrompt: String,
+        messages: [Message],
+        model: String,
+        forceInlineSystemPrompt: Bool
+    ) -> RequestBody {
+        let useSystemInstruction = !forceInlineSystemPrompt && supportsSystemInstruction(model: model)
+        let contents: [Message]
+
+        if useSystemInstruction {
+            contents = messages
+        } else {
+            let inlineSystem = Message(
+                role: "user",
+                parts: [.init(text: "SYSTEM CONTEXT:\n\(systemPrompt)")]
+            )
+            contents = [inlineSystem] + messages
+        }
+
+        return RequestBody(
+            systemInstruction: useSystemInstruction ? .init(parts: [.init(text: systemPrompt)]) : nil,
+            contents: contents,
+            generationConfig: .init(temperature: 0.7, maxOutputTokens: 1024, topP: 0.9)
+        )
+    }
+
+    private static func supportsSystemInstruction(model: String) -> Bool {
+        // Current known exception in this app's model list: Gemma variants.
+        !model.lowercased().hasPrefix("gemma")
+    }
+
+    private static func sendRequest(_ body: RequestBody, using requestTemplate: URLRequest) async throws -> Data {
+        var request = requestTemplate
+        let encoder = JSONEncoder()
+        encoder.keyEncodingStrategy = .convertToSnakeCase
+        request.httpBody = try encoder.encode(body)
+
+        let (data, response) = try await URLSession.shared.data(for: request)
+
+        if let http = response as? HTTPURLResponse, !(200...299).contains(http.statusCode) {
+            let errorBody = String(data: data, encoding: .utf8) ?? "unknown"
+            throw GeminiError.httpError(http.statusCode, errorBody)
+        }
+        return data
     }
 }

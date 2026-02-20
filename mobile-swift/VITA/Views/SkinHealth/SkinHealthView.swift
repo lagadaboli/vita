@@ -264,9 +264,13 @@ struct SkinHealthView: View {
             skinScoreCard(score: result.overallScore, source: result.source)
         }
 
-        // Heatmap + HRV chart — side by side
+        // Problem overlay + HRV chart — side by side
         HStack(alignment: .top, spacing: VITASpacing.md) {
-            FaceHeatmapView(conditions: result.conditions)
+            FaceHeatmapView(
+                conditions: result.conditions,
+                capturedImage: viewModel.capturedImage,
+                apiBaseImageURL: result.overlayBaseImageURL
+            )
                 .frame(maxWidth: .infinity)
             HRVStressChartView(readings: viewModel.hrvReadings)
                 .frame(maxWidth: .infinity)
