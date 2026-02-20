@@ -91,7 +91,7 @@ final class AskVITAViewModel {
     }
 
     var canGenerateReport: Bool {
-        !messages.isEmpty && !latestExplanations.isEmpty && !isQuerying
+        lastVITAMessage != nil && !isQuerying
     }
 
     var formattedReportFileSize: String {

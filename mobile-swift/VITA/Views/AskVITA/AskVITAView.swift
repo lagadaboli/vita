@@ -212,7 +212,7 @@ struct AskVITAView: View {
             }
 
             // PDF Report section — always at the bottom, uses latest analysis
-            if !viewModel.isQuerying && viewModel.canGenerateReport {
+            if !viewModel.isQuerying && viewModel.hasConversation {
                 reportSection
                     .padding(.horizontal, VITASpacing.lg)
                     .padding(.bottom, VITASpacing.xxxl)
@@ -250,7 +250,7 @@ struct AskVITAView: View {
                         .font(.system(.caption, design: .rounded, weight: .semibold))
                         .foregroundStyle(VITAColors.textSecondary)
 
-                    if message.hasAnalysis {
+                    if message.hasStructuredInsights {
                         let sources = sourcesFor(message)
                         ForEach(Array(sources.sorted()), id: \.self) { dataSourcePill($0) }
                     }
@@ -267,11 +267,13 @@ struct AskVITAView: View {
                     .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
 
                 // Expandable causal analysis (only if there's structured data)
-                if message.hasAnalysis {
+                if message.hasStructuredInsights {
                     AnalysisDisclosureGroup(
                         message: message,
                         causalNodes: { viewModel.causalNodes(for: $0) }
                     )
+                } else {
+                    noStructuredInsightsCard
                 }
             }
         }
@@ -466,6 +468,22 @@ struct AskVITAView: View {
             ProgressView(value: progress).tint(VITAColors.teal)
         }
     }
+
+    private var noStructuredInsightsCard: some View {
+        HStack(alignment: .top, spacing: VITASpacing.xs) {
+            Image(systemName: "sparkles")
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(VITAColors.teal)
+            Text("Insights are still loading for this reply. Ask a follow-up question to refine the causal breakdown.")
+                .font(VITATypography.caption)
+                .foregroundStyle(VITAColors.textTertiary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(.horizontal, VITASpacing.sm)
+        .padding(.vertical, 8)
+        .background(VITAColors.cardBackground.opacity(0.5))
+        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+    }
 }
 
 // MARK: - Analysis Disclosure Group
@@ -475,6 +493,32 @@ private struct AnalysisDisclosureGroup: View {
     let causalNodes: (CausalExplanation) -> [CausalChainNode]
     @State private var isExpanded = false
 
+    private var hasCausalChains: Bool {
+        !message.causalExplanations.isEmpty
+    }
+
+    private var disclosureTitle: String {
+        if hasCausalChains {
+            return isExpanded ? "Hide analysis" : "View causal analysis"
+        }
+        return isExpanded ? "Hide insights" : "View insights"
+    }
+
+    private var disclosureCount: String {
+        if hasCausalChains {
+            let count = message.causalExplanations.count
+            return "\(count) chain\(count == 1 ? "" : "s")"
+        }
+
+        if !message.counterfactuals.isEmpty {
+            let count = message.counterfactuals.count
+            return "\(count) lever\(count == 1 ? "" : "s")"
+        }
+
+        let dataPoints = message.glucoseDataPoints.count + message.mealAnnotations.count
+        return "\(dataPoints) signal\(dataPoints == 1 ? "" : "s")"
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             Button {
@@ -483,10 +527,10 @@ private struct AnalysisDisclosureGroup: View {
                 HStack(spacing: 4) {
                     Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
                         .font(.system(size: 11, weight: .semibold))
-                    Text(isExpanded ? "Hide analysis" : "View causal analysis")
+                    Text(disclosureTitle)
                         .font(VITATypography.caption)
                     Spacer()
-                    Text("\(message.causalExplanations.count) chain\(message.causalExplanations.count == 1 ? "" : "s")")
+                    Text(disclosureCount)
                         .font(VITATypography.caption)
                         .foregroundStyle(VITAColors.textTertiary)
                 }
@@ -498,14 +542,27 @@ private struct AnalysisDisclosureGroup: View {
 
             if isExpanded {
                 VStack(spacing: VITASpacing.md) {
-                    ForEach(Array(message.causalExplanations.enumerated()), id: \.offset) { _, exp in
-                        CausalExplanationCard(
-                            explanation: exp,
-                            nodes: causalNodes(exp),
-                            glucoseDataPoints: message.glucoseDataPoints,
-                            mealAnnotations: message.mealAnnotations,
-                            counterfactuals: message.counterfactuals
-                        )
+                    if hasCausalChains {
+                        ForEach(Array(message.causalExplanations.enumerated()), id: \.offset) { _, exp in
+                            CausalExplanationCard(
+                                explanation: exp,
+                                nodes: causalNodes(exp),
+                                glucoseDataPoints: message.glucoseDataPoints,
+                                mealAnnotations: message.mealAnnotations,
+                                counterfactuals: message.counterfactuals
+                            )
+                        }
+                    } else {
+                        HStack(alignment: .top, spacing: VITASpacing.xs) {
+                            Image(systemName: "info.circle.fill")
+                                .font(.system(size: 12))
+                                .foregroundStyle(VITAColors.teal)
+                            Text("No causal chain was returned for this reply, but you can still use recommendations and generate a report.")
+                                .font(VITATypography.caption)
+                                .foregroundStyle(VITAColors.textSecondary)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
                     }
 
                     if !message.counterfactuals.isEmpty {

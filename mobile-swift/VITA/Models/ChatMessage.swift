@@ -21,6 +21,12 @@ struct ChatMessage: Identifiable {
     }
 
     var hasAnalysis: Bool { !causalExplanations.isEmpty }
+    var hasStructuredInsights: Bool {
+        !causalExplanations.isEmpty ||
+        !counterfactuals.isEmpty ||
+        !glucoseDataPoints.isEmpty ||
+        !mealAnnotations.isEmpty
+    }
 
     // MARK: - Constructors
 
