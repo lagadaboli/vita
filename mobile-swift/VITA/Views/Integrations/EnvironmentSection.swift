@@ -5,6 +5,17 @@ struct EnvironmentSection: View {
     let viewModel: IntegrationsViewModel
     let isLoading: Bool
 
+    private var latestReading: IntegrationsViewModel.EnvironmentReading? {
+        viewModel.environmentReadings.max(by: { $0.timestamp < $1.timestamp })
+    }
+
+    private var previousReadings: [IntegrationsViewModel.EnvironmentReading] {
+        guard let latest = latestReading else { return [] }
+        return viewModel.environmentReadings
+            .filter { $0.id != latest.id }
+            .sorted { $0.timestamp > $1.timestamp }
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: VITASpacing.md) {
             HStack {
@@ -14,14 +25,14 @@ struct EnvironmentSection: View {
                 Text("Environment")
                     .font(VITATypography.title3)
                 Spacer()
-                if let latest = viewModel.environmentReadings.last {
+                if let latest = latestReading {
                     AQIBadge(aqi: latest.aqiUS)
                 }
             }
 
             if isLoading {
                 SkeletonCard(lines: [120, 220, 180], lineHeight: 12)
-            } else if let current = viewModel.environmentReadings.last {
+            } else if let current = latestReading {
                 VStack(spacing: VITASpacing.md) {
                     HStack(spacing: VITASpacing.md) {
                         ConditionItem(
@@ -75,7 +86,7 @@ struct EnvironmentSection: View {
                 .background(VITAColors.cardBackground)
                 .clipShape(RoundedRectangle(cornerRadius: VITASpacing.cardCornerRadius))
 
-                ForEach(viewModel.environmentReadings.dropLast().suffix(5).reversed()) { reading in
+                ForEach(Array(previousReadings.prefix(5))) { reading in
                     HStack {
                         Text(reading.timestamp, style: .date)
                             .font(VITATypography.caption)

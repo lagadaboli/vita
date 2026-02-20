@@ -27,6 +27,7 @@ public final class SampleDataGenerator: Sendable {
 
         try generateCausalEdges()
         try generateCausalPatterns()
+        try generateSkinAnalysisSamples()
     }
 
     private func generateDay(dayStart: Date, scenario: SampleDataScenarios.DayScenario) throws {
@@ -277,5 +278,81 @@ public final class SampleDataGenerator: Sendable {
                 try p.save(db)
             }
         }
+    }
+
+    // MARK: - Skin Analysis Sample Data
+
+    /// Generate 3 sample skin scans over the last 7 days so the AI has real data to reference.
+    private func generateSkinAnalysisSamples() throws {
+        let now = Date()
+        let calendar = Calendar.current
+
+        let samples: [(daysAgo: Int, score: Int, conditions: [(type: String, raw: Double, ui: Int)])] = [
+            // 5 days ago — high acne + dark circles (bad sleep week)
+            (5, 58, [
+                ("acne",          0.72, 72),
+                ("dark_circle_v2", 0.65, 65),
+                ("oiliness",      0.48, 48)
+            ]),
+            // 2 days ago — improving
+            (2, 67, [
+                ("acne",          0.50, 50),
+                ("dark_circle_v2", 0.55, 55),
+                ("redness",       0.35, 35)
+            ]),
+            // Today (most recent) — still showing dark circles from poor sleep
+            (0, 72, [
+                ("dark_circle_v2", 0.60, 60),
+                ("eye_bag",       0.45, 45),
+                ("oiliness",      0.38, 38)
+            ])
+        ]
+
+        for sample in samples {
+            guard let scanDate = calendar.date(byAdding: .day, value: -sample.daysAgo, to: now) else { continue }
+
+            let conditionSummaries = sample.conditions.map { c in
+                SkinAnalysisRecord.ConditionSummary(type: c.type, rawScore: c.raw, uiScore: c.ui)
+            }
+
+            var record = SkinAnalysisRecord(
+                timestamp: scanDate,
+                overallScore: sample.score,
+                conditionsJSON: SkinAnalysisRecord.encodeConditions(conditionSummaries),
+                apiSource: "demo"
+            )
+            try healthGraph.ingest(&record)
+        }
+
+        // Add skin causal edges linking known patterns
+        var skinEdge1 = HealthGraphEdge(
+            sourceNodeID: "meal_late_1",
+            targetNodeID: "skin_1",
+            edgeType: .mealToSkin,
+            causalStrength: 0.75,
+            temporalOffsetSeconds: 48 * 3600,  // skin reacts over 48h
+            confidence: 0.70
+        )
+        try healthGraph.addEdge(&skinEdge1)
+
+        var skinEdge2 = HealthGraphEdge(
+            sourceNodeID: "sleep_poor_1",
+            targetNodeID: "skin_1",
+            edgeType: .sleepToSkin,
+            causalStrength: 0.80,
+            temporalOffsetSeconds: 24 * 3600,
+            confidence: 0.75
+        )
+        try healthGraph.addEdge(&skinEdge2)
+
+        var skinEdge3 = HealthGraphEdge(
+            sourceNodeID: "zombie_scroll_1",
+            targetNodeID: "skin_1",
+            edgeType: .behaviorToSkin,
+            causalStrength: 0.65,
+            temporalOffsetSeconds: 36 * 3600,
+            confidence: 0.60
+        )
+        try healthGraph.addEdge(&skinEdge3)
     }
 }

@@ -187,6 +187,24 @@ enum Migrations {
             )
         }
 
+        // MARK: - v4: Skin Analysis Results
+
+        migrator.registerMigration("v4_skin_analysis_results") { db in
+            try db.create(table: "skin_analysis_results") { t in
+                t.autoIncrementedPrimaryKey("id")
+                t.column("timestamp", .datetime).notNull()
+                t.column("overallScore", .integer).notNull()
+                t.column("conditionsJSON", .text).notNull().defaults(to: "[]")
+                t.column("apiSource", .text).notNull().defaults(to: "perfectcorp")
+            }
+
+            try db.create(
+                index: "idx_skin_analysis_results_timestamp",
+                on: "skin_analysis_results",
+                columns: ["timestamp"]
+            )
+        }
+
         try migrator.migrate(dbWriter)
     }
 }

@@ -31,6 +31,7 @@ final class IntegrationsViewModel {
 
     // Environment readings
     var environmentReadings: [EnvironmentReading] = []
+    private var appState: AppState?
 
     // MARK: - Structs
 
@@ -198,10 +199,15 @@ final class IntegrationsViewModel {
     // MARK: - Load / Refresh
 
     func load(from appState: AppState) {
-        refresh()
+        self.appState = appState
+        refresh(from: appState)
     }
 
-    func refresh() {
+    func refresh(from appState: AppState? = nil) {
+        if let appState {
+            self.appState = appState
+        }
+
         let now = Date()
 
         // Apple Watch — randomised each refresh
@@ -295,21 +301,63 @@ final class IntegrationsViewModel {
             zombieScrollSessions = []
         }
 
-        // Environment — pick 3 different days
-        environmentReadings = Self.envConditions.shuffled().prefix(3).enumerated().map { index, c in
+        // Environment — prefer HealthGraph so Dashboard and Integrations stay consistent.
+        if let syncedEnvironment = syncedEnvironmentReadings(now: now) {
+            environmentReadings = syncedEnvironment
+        } else {
+            environmentReadings = Self.envConditions.shuffled().prefix(3).enumerated().map { index, c in
+                EnvironmentReading(
+                    timestamp: now.addingTimeInterval(-Double(index) * 86400),
+                    temperatureCelsius: (c.temp + Double.random(in: -1.5...1.5) * 10).rounded() / 10,
+                    humidity: (c.humidity + Double.random(in: -4...4)).clamped(to: 10...100),
+                    aqiUS: (c.aqi + Int.random(in: -8...8)).clamped(to: 5...200),
+                    uvIndex: (c.uv + Double.random(in: -0.4...0.4)).clamped(to: 0...11),
+                    pollenIndex: c.pollen,
+                    healthImpact: c.impact
+                )
+            }
+            .sorted { $0.timestamp < $1.timestamp }
+        }
+    }
+
+    private func syncedEnvironmentReadings(now: Date) -> [EnvironmentReading]? {
+        guard let appState else { return nil }
+
+        let calendar = Calendar.current
+        let lookback = calendar.date(byAdding: .day, value: -3, to: now) ?? now
+        guard let conditions = try? appState.healthGraph.queryEnvironment(from: lookback, to: now),
+              !conditions.isEmpty else {
+            return nil
+        }
+
+        return conditions.suffix(6).map { condition in
             EnvironmentReading(
-                timestamp: now.addingTimeInterval(-Double(index) * 86400),
-                temperatureCelsius: (c.temp + Double.random(in: -1.5...1.5) * 10).rounded() / 10,
-                humidity: (c.humidity + Double.random(in: -4...4)).clamped(to: 10...100),
-                aqiUS: (c.aqi + Int.random(in: -8...8)).clamped(to: 5...200),
-                uvIndex: (c.uv + Double.random(in: -0.4...0.4)).clamped(to: 0...11),
-                pollenIndex: c.pollen,
-                healthImpact: c.impact
+                timestamp: condition.timestamp,
+                temperatureCelsius: condition.temperatureCelsius,
+                humidity: condition.humidity,
+                aqiUS: condition.aqiUS,
+                uvIndex: condition.uvIndex,
+                pollenIndex: condition.pollenIndex,
+                healthImpact: healthImpact(for: condition)
             )
         }
     }
 
     // MARK: - Helpers
+
+    private func healthImpact(for condition: EnvironmentalCondition) -> String {
+        let risks = condition.healthRisks
+        guard !risks.isEmpty else { return "No significant health risks" }
+
+        var labels: [String] = []
+        if risks.contains(.highAQI) { labels.append("Poor air quality") }
+        if risks.contains(.highUV) { labels.append("High UV") }
+        if risks.contains(.highPollen) { labels.append("High pollen") }
+        if risks.contains(.highHumidity) { labels.append("High humidity") }
+        if risks.contains(.extremeHeat) { labels.append("Extreme heat") }
+        if risks.contains(.extremeCold) { labels.append("Extreme cold") }
+        return labels.joined(separator: ", ")
+    }
 
     private func impactLabel(for gl: Double) -> String {
         if gl > 35 { return "High spike expected" }

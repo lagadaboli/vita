@@ -20,7 +20,7 @@ struct SkinConditionCard: View {
                         .frame(width: 28)
 
                     VStack(alignment: .leading, spacing: 2) {
-                        Text(condition.type.rawValue)
+                        Text(condition.type.displayName)
                             .font(VITATypography.headline)
                             .foregroundStyle(VITAColors.textPrimary)
                         Text(zonesLabel)

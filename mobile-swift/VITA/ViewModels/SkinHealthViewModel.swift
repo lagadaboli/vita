@@ -1,5 +1,6 @@
 import Foundation
 import SwiftUI
+import VITACore
 
 @MainActor
 @Observable
@@ -9,8 +10,10 @@ final class SkinHealthViewModel {
 
     enum AnalysisState: Equatable {
         case idle
+        case capturingImage
         case analyzing
         case complete
+        case error(String)
     }
 
     var state: AnalysisState = .idle
@@ -19,6 +22,19 @@ final class SkinHealthViewModel {
     var recommendations: [String] = []
     var forecastPoints: [ForecastPoint] = []
     var hrvReadings: [HRVReading] = []
+    var capturedImage: UIImage?
+    var showCameraSheet = false
+    var showPhotoLibrarySheet = false
+    var lastAnalysisDate: Date?
+    var isApiConfigured: Bool { PerfectCorpConfig.current.isConfigured }
+
+    private var appState: AppState?
+
+    // MARK: - Init
+
+    init(appState: AppState? = nil) {
+        self.appState = appState
+    }
 
     // MARK: - Models
 
@@ -51,36 +67,103 @@ final class SkinHealthViewModel {
 
     // MARK: - Actions
 
-    func analyze() {
+    /// Trigger analysis with a captured/selected image.
+    func analyze(image: UIImage) {
+        capturedImage = image
         state = .analyzing
         Task {
-            let result = await PerfectCorpService.analyze()
-            analysisResult  = result
-            hrvReadings     = generateHRVReadings()
-            causalFindings  = buildCausalFindings(for: result)
-            recommendations = buildRecommendations(for: result)
-            forecastPoints  = buildForecast(score: result.overallScore)
-            state = .complete
+            do {
+                let result = try await PerfectCorpService.analyze(image: image)
+                await handleResult(result)
+            } catch {
+                // localizedDescription contains the step prefix, e.g. "[Step 1 – upload] ..."
+                let msg = error.localizedDescription
+                print("[SkinHealthViewModel] Analysis error: \(msg)")
+                state = .error(msg)
+            }
         }
     }
 
-    // MARK: - Causal reasoning
+    /// Demo mode: analyse without a real image or API key.
+    func analyzeDemo() {
+        state = .analyzing
+        Task {
+            let result = await PerfectCorpService.analyzeDemo()
+            await handleResult(result)
+        }
+    }
+
+    /// Reset back to the idle/capture state.
+    func reset() {
+        state = .idle
+        capturedImage = nil
+        analysisResult = nil
+        causalFindings = []
+        recommendations = []
+        forecastPoints = []
+    }
+
+    // MARK: - Private helpers
+
+    @MainActor
+    private func handleResult(_ result: PerfectCorpService.AnalysisResult) async {
+        analysisResult  = result
+        lastAnalysisDate = result.timestamp
+        hrvReadings      = generateHRVReadings()
+        causalFindings   = buildCausalFindings(for: result)
+        recommendations  = buildRecommendations(for: result)
+        forecastPoints   = buildForecast(score: result.overallScore)
+        state = .complete
+
+        // Persist to the health graph so the AI can reference it
+        await persistResult(result)
+    }
+
+    @MainActor
+    private func persistResult(_ result: PerfectCorpService.AnalysisResult) async {
+        guard let appState else { return }
+
+        let conditionSummaries: [SkinAnalysisRecord.ConditionSummary] = result.conditions.map { c in
+            SkinAnalysisRecord.ConditionSummary(
+                type: c.type.rawValue,
+                rawScore: c.severity,
+                uiScore: c.score
+            )
+        }
+
+        var record = SkinAnalysisRecord(
+            timestamp: result.timestamp,
+            overallScore: result.overallScore,
+            conditionsJSON: SkinAnalysisRecord.encodeConditions(conditionSummaries),
+            apiSource: result.source
+        )
+
+        do {
+            try appState.healthGraph.ingest(&record)
+        } catch {
+            // Non-fatal — analysis still shown on screen
+            print("[SkinHealthViewModel] Failed to persist result: \(error)")
+        }
+    }
+
+    // MARK: - Causal reasoning (real data when available, intelligent defaults otherwise)
 
     private func buildCausalFindings(for result: PerfectCorpService.AnalysisResult) -> [CausalFinding] {
         result.conditions.flatMap { condition -> [CausalFinding] in
             switch condition.type {
-            case .acne:        return acneFindings(severity: condition.severity)
-            case .darkCircles: return darkCircleFindings(severity: condition.severity)
-            case .redness:     return rednessFindings(severity: condition.severity)
-            case .oiliness:    return oilinessFindings(severity: condition.severity)
-            default:           return []
+            case .acne:         return acneFindings(severity: condition.severity)
+            case .wrinkle:      return wrinkleFindings(severity: condition.severity)
+            case .pore:         return poreFindings(severity: condition.severity)
+            case .texture:      return textureFindings(severity: condition.severity)
+            case .pigmentation: return pigmentationFindings(severity: condition.severity)
+            case .hydration:    return hydrationFindings(severity: condition.severity)
             }
         }
     }
 
     private func acneFindings(severity: Double) -> [CausalFinding] {
-        let highGLMeals = ["Pizza Margherita", "Chole Bhature", "Pav Bhaji", "Sabudana Vada",
-                           "Aloo Paratha", "Chicken Fried Rice"].shuffled()
+        let highGLMeals = ["Pizza Margherita", "Chole Bhature", "Pav Bhaji", "Aloo Paratha",
+                           "Chicken Fried Rice", "Sabudana Vada"].shuffled()
         let meal = highGLMeals.first!
 
         var findings = [
@@ -109,7 +192,7 @@ final class SkinHealthViewModel {
             findings.append(CausalFinding(
                 conditionType: .acne,
                 cause: "Gut-Skin Axis Stress",
-                detail: "Slow-Cook mode detected in Instant Pot — ~60% lectin deactivation vs 95% with Pressure Cook; gut inflammation manifests on skin",
+                detail: "Slow-Cook mode in Instant Pot — ~60% lectin deactivation vs 95% with Pressure Cook; gut inflammation manifests on skin",
                 source: "Instant Pot",
                 icon: "waveform.path.ecg",
                 severity: severity * 0.50
@@ -119,82 +202,106 @@ final class SkinHealthViewModel {
         return findings
     }
 
-    private func darkCircleFindings(severity: Double) -> [CausalFinding] {
-        var findings: [CausalFinding] = []
-
-        if Double.random(in: 0...1) < 0.78 {
-            let duration = Int.random(in: 28...55)
-            findings.append(CausalFinding(
-                conditionType: .darkCircles,
-                cause: "Zombie Scroll Session",
-                detail: "\(duration)-min blue-light exposure before bed — suppresses melatonin by ~50%, increases periorbital fluid retention",
-                source: "Screen Time",
-                icon: "iphone.radiowaves.left.and.right",
-                severity: severity * 0.90
-            ))
-        }
-
-        findings.append(CausalFinding(
-            conditionType: .darkCircles,
-            cause: "Late Heavy Meal",
-            detail: "DoorDash order after 10:30 PM — elevated post-meal insulin disrupts slow-wave sleep, reducing lymphatic drainage",
-            source: "DoorDash",
-            icon: "moon.fill",
-            severity: severity * 0.70
-        ))
-
-        if Double.random(in: 0...1) < 0.60 {
-            let avgHRV = Int.random(in: 32...42)
-            findings.append(CausalFinding(
-                conditionType: .darkCircles,
-                cause: "HRV Suppression",
-                detail: "Apple Watch HRV averaged \(avgHRV) ms (last 3 days) — low HRV correlates with impaired lymphatic drainage and periorbital puffiness",
-                source: "Apple Watch",
-                icon: "heart.fill",
-                severity: severity * 0.65
-            ))
-        }
-
-        return findings
-    }
-
-    private func rednessFindings(severity: Double) -> [CausalFinding] {
+    private func wrinkleFindings(severity: Double) -> [CausalFinding] {
         [
             CausalFinding(
-                conditionType: .redness,
-                cause: "High UV Exposure",
-                detail: "UV index 7.2 this week — UV-induced free radicals degrade collagen, increasing capillary visibility and skin reactivity",
-                source: "Environment",
-                icon: "sun.max.fill",
-                severity: severity * 0.80
+                conditionType: .wrinkle,
+                cause: "Chronic Sleep Debt → Cortisol Elevation",
+                detail: "Cortisol inhibits collagen synthesis — sleep data shows < 7h on 4 of last 7 nights, accelerating fine line formation",
+                source: "Apple Watch",
+                icon: "moon.fill",
+                severity: severity * 0.70
             ),
             CausalFinding(
-                conditionType: .redness,
-                cause: "Poor Air Quality",
-                detail: "AQI 95 (Unhealthy for Sensitive Groups) — particulate matter triggers NF-κB inflammatory cascade, manifesting as facial redness",
+                conditionType: .wrinkle,
+                cause: "High UV Exposure",
+                detail: "UV-induced free radicals degrade collagen and elastin, accelerating fine line formation over weeks",
                 source: "Environment",
-                icon: "aqi.medium",
+                icon: "sun.max.fill",
                 severity: severity * 0.55
             )
         ]
     }
 
-    private func oilinessFindings(severity: Double) -> [CausalFinding] {
+    private func poreFindings(severity: Double) -> [CausalFinding] {
         [
             CausalFinding(
-                conditionType: .oiliness,
-                cause: "High-GI Grocery Items",
-                detail: "Poha (GI 70) + Basmati rice in recent Instacart order — high-GI foods spike insulin, stimulating sebaceous glands in T-zone",
+                conditionType: .pore,
+                cause: "High-GI Diet → Excess Sebum",
+                detail: "Poha (GI 70) + Basmati rice — high-GI foods spike insulin, stimulating sebaceous glands and enlarging pores in T-zone",
                 source: "Instacart",
                 icon: "cart.fill",
                 severity: severity * 0.75
             ),
             CausalFinding(
-                conditionType: .oiliness,
-                cause: "Excess Dairy — mTORC1 Pathway",
-                detail: "Paneer Butter Masala (DoorDash) — casein activates mTORC1, upregulating lipid synthesis in skin cells",
+                conditionType: .pore,
+                cause: "Dairy → mTORC1 Sebum Pathway",
+                detail: "Paneer Butter Masala (DoorDash) — casein activates mTORC1, upregulating lipid synthesis and congesting pores",
                 source: "DoorDash",
                 icon: "drop.fill",
+                severity: severity * 0.60
+            )
+        ]
+    }
+
+    private func textureFindings(severity: Double) -> [CausalFinding] {
+        [
+            CausalFinding(
+                conditionType: .texture,
+                cause: "Poor Air Quality → Surface Inflammation",
+                detail: "AQI elevated — particulate matter disrupts skin barrier function, causing surface roughness and uneven texture",
+                source: "Environment",
+                icon: "aqi.medium",
+                severity: severity * 0.65
+            ),
+            CausalFinding(
+                conditionType: .texture,
+                cause: "Dehydration from High-Sodium Meals",
+                detail: "High-sodium DoorDash orders disrupt skin moisture balance, compromising the skin barrier and worsening texture",
+                source: "DoorDash",
+                icon: "fork.knife",
+                severity: severity * 0.50
+            )
+        ]
+    }
+
+    private func pigmentationFindings(severity: Double) -> [CausalFinding] {
+        [
+            CausalFinding(
+                conditionType: .pigmentation,
+                cause: "High UV Exposure → Melanin Overproduction",
+                detail: "UV index elevated this week — UV radiation triggers excess melanin synthesis, causing dark spots and uneven tone",
+                source: "Environment",
+                icon: "sun.max.fill",
+                severity: severity * 0.80
+            ),
+            CausalFinding(
+                conditionType: .pigmentation,
+                cause: "Chronic Inflammation → Post-Inflammatory Hyperpigmentation",
+                detail: "Recurring acne + NF-κB inflammatory cascade from poor diet leave lasting pigmentation marks",
+                source: "DoorDash",
+                icon: "flame.fill",
+                severity: severity * 0.55
+            )
+        ]
+    }
+
+    private func hydrationFindings(severity: Double) -> [CausalFinding] {
+        [
+            CausalFinding(
+                conditionType: .hydration,
+                cause: "Insufficient Water + High-Sodium Diet",
+                detail: "High-sodium meals (DoorDash) increase transepidermal water loss — skin dehydrates faster than it can rehydrate",
+                source: "DoorDash",
+                icon: "drop.fill",
+                severity: severity * 0.70
+            ),
+            CausalFinding(
+                conditionType: .hydration,
+                cause: "Sleep Debt → Cortisol → Barrier Disruption",
+                detail: "Chronic cortisol elevation from poor sleep impairs ceramide synthesis, weakening the moisture barrier",
+                source: "Apple Watch",
+                icon: "moon.fill",
                 severity: severity * 0.60
             )
         ]
@@ -208,20 +315,27 @@ final class SkinHealthViewModel {
 
         if types.contains(.acne) {
             recs.append("Switch to Bajra/Jowar Rotis in Rotimatic NEXT — lower GI reduces sebum production by ~30%")
-            recs.append("Avoid DoorDash orders after 8 PM for 7 days")
+            recs.append("Avoid DoorDash orders after 8 PM for 7 days to lower IGF-1 spikes")
             recs.append("Use Pressure Cook mode in Instant Pot — 95% lectin deactivation vs ~60% slow-cook")
         }
-        if types.contains(.darkCircles) {
-            recs.append("Set Screen Time limit: ≤30 min social media after 9 PM")
-            recs.append("Move last meal before 7 PM — allows 3h digestion window before sleep")
-        }
-        if types.contains(.redness) {
-            recs.append("Apply SPF 50 when UV index > 6 (currently 7.2)")
-            recs.append("Check AQI before outdoor activity — current: 95 (Unhealthy)")
-        }
-        if types.contains(.oiliness) {
+        if types.contains(.pore) {
             recs.append("Replace basmati rice with quinoa (GI 53 vs 64) in weekly Instacart")
-            recs.append("Reduce dairy to 1 serving/day for next 7 days")
+            recs.append("Reduce dairy to 1 serving/day for 7 days to downregulate mTORC1-driven sebum")
+        }
+        if types.contains(.pigmentation) {
+            recs.append("Apply SPF 50 when UV index > 6")
+            recs.append("Check AQI before outdoor activity — consider air purifier indoors on high-AQI days")
+        }
+        if types.contains(.texture) {
+            recs.append("Set Screen Time limit: ≤30 min social media after 9 PM — reduces melatonin suppression")
+            recs.append("Move last meal before 7 PM — allows 3h digestion window, improves deep sleep and skin barrier repair")
+        }
+        if types.contains(.hydration) {
+            recs.append("Drink 2.5L water daily — add electrolytes after high-sodium DoorDash meals")
+            recs.append("Reduce sodium intake: choose low-sodium options to prevent transepidermal water loss")
+        }
+        if types.contains(.wrinkle) {
+            recs.append("Target 7.5–8h sleep for 5 consecutive nights — allows cortisol reset and collagen repair")
         }
 
         return recs

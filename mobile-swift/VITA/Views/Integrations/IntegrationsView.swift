@@ -21,11 +21,12 @@ struct IntegrationsView: View {
                 .padding(.bottom, VITASpacing.xxl)
             }
             .refreshable {
-                viewModel.refresh()
+                viewModel.refresh(from: appState)
             }
             .background(VITAColors.background)
             .navigationTitle("Integrations")
-            .onAppear {
+            .task(id: appState.isLoaded) {
+                guard appState.isLoaded else { return }
                 viewModel.load(from: appState)
             }
         }

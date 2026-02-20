@@ -18,6 +18,7 @@ public enum HealthGraphNodeType: String, Codable, Sendable {
     case symptom
     case causalPattern
     case environmental
+    case skin              // PerfectCorp skin analysis results
 }
 
 /// Concrete node wrapper for storing heterogeneous nodes in the graph.
@@ -75,6 +76,15 @@ public struct AnyHealthGraphNode: HealthGraphNode, Sendable {
             nodeID: "environment_\(condition.id ?? 0)",
             nodeType: .environmental,
             timestamp: condition.timestamp
+        )
+    }
+
+    /// Create a node from a SkinAnalysisRecord.
+    public static func from(_ analysis: SkinAnalysisRecord) -> AnyHealthGraphNode {
+        AnyHealthGraphNode(
+            nodeID: "skin_\(analysis.id ?? 0)",
+            nodeType: .skin,
+            timestamp: analysis.timestamp
         )
     }
 }

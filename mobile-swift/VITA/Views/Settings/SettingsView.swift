@@ -34,6 +34,54 @@ struct SettingsView: View {
                     }
                 }
 
+                Section("Ask VITA AI") {
+                    NavigationLink {
+                        GeminiCredentialsView()
+                    } label: {
+                        Text("Gemini API Key")
+                    }
+
+                    HStack {
+                        Text("AI Chat Status")
+                        Spacer()
+                        if GeminiConfig.current.isConfigured {
+                            HStack(spacing: 4) {
+                                Image(systemName: "sparkles")
+                                    .font(.caption)
+                                Text(displayModelName(GeminiConfig.current.model))
+                            }
+                            .foregroundStyle(VITAColors.success)
+                        } else {
+                            Text("Using engine templates")
+                                .foregroundStyle(VITAColors.amber)
+                        }
+                    }
+                }
+
+                Section("Skin Analysis") {
+                    NavigationLink {
+                        PerfectCorpCredentialsView()
+                    } label: {
+                        Text("PerfectCorp API Key")
+                    }
+
+                    HStack {
+                        Text("Skin Scan Status")
+                        Spacer()
+                        if PerfectCorpConfig.current.isConfigured {
+                            HStack(spacing: 4) {
+                                Image(systemName: "camera.fill")
+                                    .font(.caption)
+                                Text("Real AI scans enabled")
+                            }
+                            .foregroundStyle(VITAColors.success)
+                        } else {
+                            Text("Demo mode")
+                                .foregroundStyle(VITAColors.amber)
+                        }
+                    }
+                }
+
                 Section("Foxit Report APIs") {
                     NavigationLink {
                         FoxitCredentialsView()
@@ -116,6 +164,16 @@ struct SettingsView: View {
             }
             .navigationTitle("Settings")
         }
+    }
+
+    private func displayModelName(_ model: String) -> String {
+        if model.hasPrefix("gemma-") {
+            return "Gemma \(model.replacingOccurrences(of: "gemma-", with: ""))"
+        }
+        if model.hasPrefix("gemini-") {
+            return "Gemini \(model.replacingOccurrences(of: "gemini-", with: ""))"
+        }
+        return model
     }
 }
 

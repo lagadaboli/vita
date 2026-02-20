@@ -6,8 +6,6 @@ import VITADesignSystem
 @MainActor
 @Observable
 final class AskVITAViewModel {
-    private let maxExplanations = 5
-    private let maxCounterfactuals = 8
     private let maxChartPoints = 180
 
     enum ReportGenerationState: Equatable {
@@ -18,20 +16,82 @@ final class AskVITAViewModel {
         case error(String)
     }
 
+    // MARK: - Conversation
+
+    /// Full conversation history — this is the primary source of truth.
+    var messages: [ChatMessage] = []
+
+    /// Text currently in the input field.
     var queryText = ""
+
+    /// Whether the engine is processing a query right now.
     var isQuerying = false
-    var explanations: [CausalExplanation] = []
-    var counterfactuals: [Counterfactual] = []
-    var hasQueried = false
-    var lastSubmittedQuery = ""
-    var glucoseDataPoints: [GlucoseDataPoint] = []
-    var mealAnnotations: [MealAnnotationPoint] = []
+
+    /// Rotating loading phase label.
+    var loadingPhase: Int = 0
+
+    static let loadingPhases = [
+        "Scanning glucose patterns...",
+        "Cross-referencing meal data...",
+        "Analyzing HRV & sleep...",
+        "Tracing causal chains...",
+        "Generating insights..."
+    ]
+
+    var currentLoadingPhase: String {
+        Self.loadingPhases[loadingPhase % Self.loadingPhases.count]
+    }
+
+    private var loadingTask: Task<Void, Never>?
+
+    // MARK: - Report
+
     var reportState: ReportGenerationState = .idle
     var reportPDFData: Data?
     var isShowingReportShareSheet = false
 
+    // MARK: - Computed
+
+    var hasConversation: Bool { !messages.isEmpty }
+
+    /// The last VITA message — for fallback display and PDF.
+    var lastVITAMessage: ChatMessage? {
+        messages.last(where: { $0.role == .vita })
+    }
+
+    /// Structured data from the latest VITA response (for the PDF pipeline).
+    var latestExplanations: [CausalExplanation] {
+        lastVITAMessage?.causalExplanations ?? []
+    }
+
+    var latestCounterfactuals: [Counterfactual] {
+        lastVITAMessage?.counterfactuals ?? []
+    }
+
+    var latestGlucoseDataPoints: [GlucoseDataPoint] {
+        lastVITAMessage?.glucoseDataPoints ?? []
+    }
+
+    var latestMealAnnotations: [MealAnnotationPoint] {
+        lastVITAMessage?.mealAnnotations ?? []
+    }
+
+    var latestActivatedSources: Set<String> {
+        // Infer from last VITA message's causal chains
+        guard let msg = lastVITAMessage, msg.hasAnalysis else { return [] }
+        var sources = Set<String>()
+        if !msg.glucoseDataPoints.isEmpty { sources.insert("Glucose") }
+        if !msg.mealAnnotations.isEmpty { sources.insert("Meals") }
+        let chain = msg.causalExplanations.flatMap(\.causalChain).joined(separator: " ").lowercased()
+        if chain.contains("hrv") { sources.insert("HRV") }
+        if chain.contains("sleep") { sources.insert("Sleep") }
+        if chain.contains("screen") || chain.contains("dopamine") { sources.insert("Behavior") }
+        if chain.contains("aqi") || chain.contains("pollen") { sources.insert("Environment") }
+        return sources
+    }
+
     var canGenerateReport: Bool {
-        hasQueried && !explanations.isEmpty && !isQuerying
+        !messages.isEmpty && !latestExplanations.isEmpty && !isQuerying
     }
 
     var formattedReportFileSize: String {
@@ -42,65 +102,91 @@ final class AskVITAViewModel {
         return String(format: "%.1f MB", Double(bytes) / (1_024 * 1_024))
     }
 
+    // MARK: - Suggestions
+
     let suggestions = [
         "Why am I tired?",
         "Why can't I focus?",
         "Why is my stomach upset?",
-        "Why am I sleeping poorly?"
+        "Why am I sleeping poorly?",
+        "Why is my HRV low?",
+        "Why did my glucose spike?",
+        "Why do I feel anxious?",
+        "Why am I crashing after meals?"
     ]
 
-    func query(appState: AppState) async {
-        let text = queryText.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !text.isEmpty else { return }
+    // MARK: - Send Message
 
-        resetReport()
-        explanations = []
-        counterfactuals = []
-        glucoseDataPoints = []
-        mealAnnotations = []
-        lastSubmittedQuery = text
+    func sendMessage(appState: AppState) async {
+        let text = queryText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !text.isEmpty, !isQuerying else { return }
+
+        // Clear input immediately
+        queryText = ""
         isQuerying = true
-        defer { isQuerying = false }
+        loadingPhase = 0
+
+        // Append user message to history
+        messages.append(.user(text))
+
+        // Rotate loading phase labels while processing
+        loadingTask?.cancel()
+        loadingTask = Task { [weak self] in
+            guard let self else { return }
+            while !Task.isCancelled {
+                try? await Task.sleep(nanoseconds: 1_400_000_000)
+                if Task.isCancelled { break }
+                self.loadingPhase += 1
+            }
+        }
+
+        defer {
+            isQuerying = false
+            loadingTask?.cancel()
+            loadingTask = nil
+        }
 
         do {
-            let rawExplanations = try await appState.causalityEngine.querySymptom(text)
-            explanations = Array(rawExplanations.prefix(maxExplanations))
-            hasQueried = true
+            // Pass all messages EXCEPT the last one (user message just appended) as history
+            let history = Array(messages.dropLast())
 
-            // Generate context-aware counterfactuals from the explanations
-            let generatedCounterfactuals = try await appState.causalityEngine.generateCounterfactual(
-                forSymptom: text,
-                explanations: explanations
-            )
-            counterfactuals = Array(
-                generatedCounterfactuals
-                    .sorted(by: { $0.impact > $1.impact })
-                    .prefix(maxCounterfactuals)
+            let result = try await VITAChatEngine.processMessage(
+                userMessage: text,
+                history: history,
+                appState: appState
             )
 
-            // Fetch glucose + meal data for annotated chart
-            loadChartData(appState: appState)
+            let vitaMsg = ChatMessage.vita(
+                content: result.response,
+                explanations: result.explanations,
+                counterfactuals: result.counterfactuals,
+                glucoseDataPoints: result.glucoseDataPoints,
+                mealAnnotations: result.mealAnnotations
+            )
+            messages.append(vitaMsg)
 
-            // Tier 4: SMS escalation check
-            await checkEscalation(appState: appState)
+            // Escalation check
+            await checkEscalation(appState: appState, explanations: result.explanations)
+
         } catch {
-            explanations = []
-            counterfactuals = []
+            messages.append(.vitaError("Sorry, I ran into an error: \(error.localizedDescription)"))
         }
     }
 
+    // MARK: - Report Generation (PDF pipeline — unchanged)
+
     func generateReport(appState: AppState) async {
-        guard hasQueried else {
+        guard !messages.isEmpty else {
             reportState = .error("Ask VITA a question before generating a report.")
             return
         }
 
-        let question = lastSubmittedQuery.isEmpty ? queryText.trimmingCharacters(in: .whitespacesAndNewlines) : lastSubmittedQuery
-        guard !question.isEmpty else {
-            reportState = .error("Missing question context. Ask VITA again and retry.")
+        guard let lastUserMsg = messages.last(where: { $0.role == .user }) else {
+            reportState = .error("Missing question context.")
             return
         }
 
+        let question = lastUserMsg.content
         let config = FoxitConfig.current
         guard config.isConfigured else {
             reportState = .error("Foxit credentials are missing. Add both API app keys in Settings.")
@@ -113,8 +199,8 @@ final class AskVITAViewModel {
         do {
             let context = HealthReportService.AskVITAContext(
                 question: question,
-                explanations: explanations,
-                counterfactuals: counterfactuals
+                explanations: latestExplanations,
+                counterfactuals: latestCounterfactuals
             )
             let values = HealthReportService.buildAskVITADocumentValues(
                 appState: appState,
@@ -128,7 +214,6 @@ final class AskVITAViewModel {
             )
 
             reportState = .optimizingPDF
-
             let optimizedPDF = try await FoxitPDFServicesService.optimize(pdfData: rawPDF, config: config)
             reportPDFData = optimizedPDF
             reportState = .complete
@@ -142,6 +227,14 @@ final class AskVITAViewModel {
         reportPDFData = nil
         isShowingReportShareSheet = false
     }
+
+    func clearConversation() {
+        messages = []
+        queryText = ""
+        resetReport()
+    }
+
+    // MARK: - Causal Nodes (for CausalExplanationCard)
 
     func causalNodes(for explanation: CausalExplanation) -> [CausalChainNode] {
         let icons = ["fork.knife", "chart.line.uptrend.xyaxis", "chart.line.downtrend.xyaxis", "waveform.path.ecg", "person.fill"]
@@ -159,59 +252,15 @@ final class AskVITAViewModel {
         }
     }
 
-    // MARK: - Chart Data
+    // MARK: - Escalation Check (Tier 4)
 
-    private func loadChartData(appState: AppState) {
-        let now = Date()
-        let sixHoursAgo = now.addingTimeInterval(-6 * 3600)
-
-        do {
-            let readings = try appState.healthGraph.queryGlucose(from: sixHoursAgo, to: now)
-            let mappedReadings = readings.map {
-                GlucoseDataPoint(timestamp: $0.timestamp, value: $0.glucoseMgDL)
-            }
-            glucoseDataPoints = downsample(mappedReadings, to: maxChartPoints)
-
-            let meals = try appState.healthGraph.queryMeals(from: sixHoursAgo, to: now)
-            let mappedMeals = meals.map { meal in
-                let label = meal.ingredients.first?.name ?? meal.source.rawValue
-                let gl = meal.estimatedGlycemicLoad ?? meal.computedGlycemicLoad
-                return MealAnnotationPoint(timestamp: meal.timestamp, label: label, glycemicLoad: gl)
-            }
-            mealAnnotations = downsample(mappedMeals, to: maxCounterfactuals)
-        } catch {
-            #if DEBUG
-            print("[AskVITAViewModel] Chart data load failed: \(error)")
-            #endif
-        }
-    }
-
-    // MARK: - SMS Escalation (Tier 4)
-
-    private func checkEscalation(appState: AppState) async {
+    private func checkEscalation(appState: AppState, explanations: [CausalExplanation]) async {
         guard let top = explanations.first else { return }
-
         let classifier = HighPainClassifier()
-        let score = classifier.score(
-            explanation: top,
-            healthGraph: appState.healthGraph
-        )
-
+        let score = classifier.score(explanation: top, healthGraph: appState.healthGraph)
         if score >= 0.75 {
             let client = EscalationClient()
-            await client.escalate(
-                symptom: top.symptom,
-                reason: top.narrative,
-                confidence: score
-            )
+            await client.escalate(symptom: top.symptom, reason: top.narrative, confidence: score)
         }
-    }
-
-    private func downsample<T>(_ items: [T], to target: Int) -> [T] {
-        guard target > 0, items.count > target else { return items }
-        let strideValue = max(1, items.count / target)
-        return Array(items.enumerated().compactMap { index, element in
-            index % strideValue == 0 ? element : nil
-        }.prefix(target))
     }
 }
