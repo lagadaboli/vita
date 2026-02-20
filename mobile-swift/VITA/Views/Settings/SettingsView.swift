@@ -58,6 +58,30 @@ struct SettingsView: View {
                     }
                 }
 
+                Section("Skin Analysis") {
+                    NavigationLink {
+                        PerfectCorpCredentialsView()
+                    } label: {
+                        Text("PerfectCorp API Key")
+                    }
+
+                    HStack {
+                        Text("Skin Scan Status")
+                        Spacer()
+                        if PerfectCorpConfig.current.isConfigured {
+                            HStack(spacing: 4) {
+                                Image(systemName: "camera.fill")
+                                    .font(.caption)
+                                Text("Real AI scans enabled")
+                            }
+                            .foregroundStyle(VITAColors.success)
+                        } else {
+                            Text("Demo mode")
+                                .foregroundStyle(VITAColors.amber)
+                        }
+                    }
+                }
+
                 Section("Foxit Report APIs") {
                     NavigationLink {
                         FoxitCredentialsView()

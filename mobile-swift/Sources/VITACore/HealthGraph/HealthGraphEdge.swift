@@ -49,6 +49,12 @@ extension HealthGraphEdge {
         case environmentToSleep = "environment_to_sleep"
         case environmentToDigestion = "environment_to_digestion"
         case behaviorToMeal = "behavior_to_meal"
+        // Skin analysis causal edges
+        case mealToSkin = "meal_to_skin"           // High-GL meals → acne/oiliness
+        case sleepToSkin = "sleep_to_skin"          // Poor sleep → dark circles
+        case behaviorToSkin = "behavior_to_skin"    // Screen time → dark circles / oiliness
+        case environmentToSkin = "environment_to_skin" // AQI/UV → redness
+        case skinToSymptom = "skin_to_symptom"      // Skin conditions as systemic symptom signals
         case temporal
         case causal
     }

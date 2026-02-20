@@ -47,6 +47,13 @@ public final class HealthGraph: Sendable {
         }
     }
 
+    /// Persist a skin analysis result as a node in the graph.
+    public func ingest(_ analysis: inout SkinAnalysisRecord) throws {
+        try database.write { db in
+            try analysis.save(db)
+        }
+    }
+
     // MARK: - Edge Operations
 
     /// Add a causal edge between two nodes.
@@ -152,6 +159,29 @@ public final class HealthGraph: Sendable {
                 .filter(BehavioralEvent.Columns.timestamp >= startDate)
                 .filter(BehavioralEvent.Columns.timestamp <= endDate)
                 .order(BehavioralEvent.Columns.timestamp)
+                .fetchAll(db)
+        }
+    }
+
+    /// Return the most recent skin analysis result, or nil if none exists.
+    public func queryLatestSkinAnalysis() throws -> SkinAnalysisRecord? {
+        try database.read { db in
+            try SkinAnalysisRecord
+                .order(SkinAnalysisRecord.Columns.timestamp.desc)
+                .fetchOne(db)
+        }
+    }
+
+    /// Return all skin analysis results within a time window.
+    public func querySkinAnalyses(
+        from startDate: Date,
+        to endDate: Date
+    ) throws -> [SkinAnalysisRecord] {
+        try database.read { db in
+            try SkinAnalysisRecord
+                .filter(SkinAnalysisRecord.Columns.timestamp >= startDate)
+                .filter(SkinAnalysisRecord.Columns.timestamp <= endDate)
+                .order(SkinAnalysisRecord.Columns.timestamp.desc)
                 .fetchAll(db)
         }
     }

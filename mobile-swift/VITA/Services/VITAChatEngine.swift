@@ -38,6 +38,8 @@ struct VITAChatEngine: Sendable {
 
         let now = Date()
         let windowStart = now.addingTimeInterval(-6 * 3_600)
+        // Skin analysis looks back 7 days (conditions don't change hour-to-hour)
+        let skinWindowStart = now.addingTimeInterval(-7 * 24 * 3_600)
 
         // ── Step 1: Causal Analysis ────────────────────────────────────────────
         var explanations: [CausalExplanation]
@@ -60,10 +62,12 @@ struct VITAChatEngine: Sendable {
         // ── Step 2: Health Context Data ───────────────────────────────────────
         let glucosePoints = loadGlucose(appState: appState, from: windowStart, to: now)
         let mealPoints = loadMeals(appState: appState, from: windowStart, to: now)
+        let latestSkinForSources = try? appState.healthGraph.queryLatestSkinAnalysis()
         let activatedSources = inferSources(
             explanations: explanations,
             glucosePoints: glucosePoints,
-            mealPoints: mealPoints
+            mealPoints: mealPoints,
+            skinAnalysis: latestSkinForSources
         )
 
         // ── Step 3: Gemini or fallback ─────────────────────────────────────────
@@ -87,6 +91,7 @@ struct VITAChatEngine: Sendable {
         }
 
         // ── Step 4: Build system prompt with full health context ───────────────
+        let latestSkinAnalysis = try? appState.healthGraph.queryLatestSkinAnalysis()
         let systemPrompt = buildSystemPrompt(
             appState: appState,
             windowStart: windowStart,
@@ -94,7 +99,8 @@ struct VITAChatEngine: Sendable {
             glucosePoints: glucosePoints,
             mealPoints: mealPoints,
             explanations: explanations,
-            counterfactuals: counterfactuals
+            counterfactuals: counterfactuals,
+            skinAnalysis: latestSkinAnalysis
         )
 
         // ── Step 5: Map conversation history → Gemini format ──────────────────
@@ -129,7 +135,8 @@ struct VITAChatEngine: Sendable {
         glucosePoints: [GlucoseDataPoint],
         mealPoints: [MealAnnotationPoint],
         explanations: [CausalExplanation],
-        counterfactuals: [Counterfactual]
+        counterfactuals: [Counterfactual],
+        skinAnalysis: SkinAnalysisRecord? = nil
     ) -> String {
         let timeFmt = DateFormatter()
         timeFmt.dateStyle = .none
@@ -143,12 +150,16 @@ struct VITAChatEngine: Sendable {
         You are VITA, an intelligent personal health causality engine in conversation with your user.
 
         YOUR ROLE:
-        • Trace causal chains through the user's REAL health data (timestamps, values, meal sources).
-        • Be specific. Use exact numbers from the data (e.g., "glucose spiked to 156mg/dL at 7:45pm after your Rotimatic roti with GL 28").
+        • Trace causal chains through the user's REAL health data (timestamps, values, meal sources, skin scans).
+        • Be specific. Use exact numbers from the data (e.g., "glucose spiked to 156mg/dL at 7:45pm", "dark circles score 68/100").
         • Explain root causes clearly and directly. Avoid hedging excessively.
-        • Suggest 1-2 concrete, evidence-backed interventions grounded in the data shown below.
+        • CROSS-DOMAIN REASONING: You have access to skin analysis data. Use it to reason across domains.
+          - Example: dark circles (skin) + poor sleep (HRV/sleep) + late meals → explains morning headaches or fatigue.
+          - Example: acne (skin) + high-GL meals + elevated glucose → same insulin pathway explains both skin and energy issues.
+          - Example: redness (skin) + high AQI (environment) → systemic inflammation may cause respiratory symptoms too.
+        • Suggest 1-2 concrete, evidence-backed interventions grounded in all data sources.
         • In multi-turn conversations, reference what was said before and build on it.
-        • Keep each response to 2-4 focused paragraphs. Never fabricate data.
+        • Keep each response to 2-4 focused paragraphs. Never fabricate data — only use what's in the sections below.
         • End responses with a brief follow-up prompt to encourage continued exploration.
 
         DATA WINDOW: \(windowFmt.string(from: windowStart)) → \(windowFmt.string(from: windowEnd))
@@ -195,6 +206,47 @@ struct VITAChatEngine: Sendable {
         // Environment
         if let envSummary = loadEnvironment(appState: appState, windowStart: windowStart, windowEnd: windowEnd) {
             p += "\n━━ ENVIRONMENT ━━\n\(envSummary)\n"
+        }
+
+        // Skin Analysis (PerfectCorp YouCam — most recent scan)
+        p += "\n━━ SKIN ANALYSIS (PerfectCorp YouCam AI) ━━\n"
+        if let skin = skinAnalysis {
+            let skinFmt = DateFormatter()
+            skinFmt.dateStyle = .short
+            skinFmt.timeStyle = .short
+            p += "  Scan date: \(skinFmt.string(from: skin.timestamp))\n"
+            p += "  Overall skin score: \(skin.overallScore)/100\n"
+            let conditions = skin.conditions
+            if conditions.isEmpty {
+                p += "  No significant skin conditions detected.\n"
+            } else {
+                for c in conditions {
+                    let label = c.rawScore > 0.65 ? "Severe" : c.rawScore > 0.35 ? "Moderate" : "Mild"
+                    p += "  • \(c.type): \(label) (score \(c.uiScore)/100, raw \(String(format: "%.2f", c.rawScore)))\n"
+                }
+                // Cross-domain causal hints for the AI
+                p += "\n  CROSS-DOMAIN REASONING HINTS:\n"
+                let hasAcne       = conditions.contains { $0.type == "acne" }
+                let hasDarkCircles = conditions.contains { $0.type == "dark_circle_v2" || $0.type == "eye_bag" }
+                let hasRedness    = conditions.contains { $0.type == "redness" }
+                let hasOiliness   = conditions.contains { $0.type == "oiliness" }
+                if hasDarkCircles {
+                    p += "  ▸ Dark circles/eye bags + poor sleep data → may explain fatigue or headaches (shared root: sleep deprivation → cortisol → periorbital inflammation + systemic inflammation).\n"
+                    p += "  ▸ Dark circles + late meals + low HRV → headache risk elevated (glycemic crash after late eating → impaired sleep → HRV suppression → tension headache via vascular inflammation).\n"
+                }
+                if hasAcne {
+                    p += "  ▸ Acne + high-GL meals → insulin spike cascade affects both skin (sebum) and energy levels (reactive hypoglycemia).\n"
+                    p += "  ▸ Acne + gut inflammation (slow-cook lectin retention) → gut-skin axis; same inflammation may cause bloating or brain fog.\n"
+                }
+                if hasRedness {
+                    p += "  ▸ Skin redness + high AQI → systemic NF-κB inflammation; may also contribute to respiratory symptoms or fatigue.\n"
+                }
+                if hasOiliness {
+                    p += "  ▸ Oiliness + high-GI diet → same insulin/androgen pathway causing energy crashes; look for correlated glucose spikes.\n"
+                }
+            }
+        } else {
+            p += "  No skin analysis data available yet. User can run a scan in the Skin Audit tab.\n"
         }
 
         // Causal Analysis from ReAct engine
@@ -317,17 +369,22 @@ struct VITAChatEngine: Sendable {
     private static func inferSources(
         explanations: [CausalExplanation],
         glucosePoints: [GlucoseDataPoint],
-        mealPoints: [MealAnnotationPoint]
+        mealPoints: [MealAnnotationPoint],
+        skinAnalysis: SkinAnalysisRecord? = nil
     ) -> Set<String> {
         var sources = Set<String>()
         if !glucosePoints.isEmpty { sources.insert("Glucose") }
         if !mealPoints.isEmpty { sources.insert("Meals") }
+        if skinAnalysis != nil { sources.insert("Skin") }
 
         let chainText = explanations.flatMap(\.causalChain).joined(separator: " ").lowercased()
         if chainText.contains("hrv") || chainText.contains("heart") { sources.insert("HRV") }
         if chainText.contains("sleep") { sources.insert("Sleep") }
         if chainText.contains("screen") || chainText.contains("dopamine") { sources.insert("Behavior") }
         if chainText.contains("aqi") || chainText.contains("pollen") { sources.insert("Environment") }
+        if chainText.contains("skin") || chainText.contains("acne") || chainText.contains("dark circle") {
+            sources.insert("Skin")
+        }
         if sources.isEmpty { sources.insert("Health Graph") }
         return sources
     }
